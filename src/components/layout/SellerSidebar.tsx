@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useNotificationStore } from "@/stores/notificationStore";
+import { useAuthStore } from "@/stores/authStore";
 
 interface NavItem {
   href: string;
@@ -120,9 +121,31 @@ function ProfileIcon({ className }: { className?: string }) {
   );
 }
 
+function LogoutIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
 export function SellerSidebar() {
   const pathname = usePathname();
   const unreadCount = useNotificationStore((state) => state.unreadCount);
+  const logout = useAuthStore((state) => state.logout);
 
   const navItems: NavItem[] = [
     {
@@ -212,6 +235,21 @@ export function SellerSidebar() {
           })}
         </ul>
       </nav>
+
+      {/* Logout */}
+      <div className="px-md py-lg border-t border-hairline-light">
+        <button
+          onClick={() => logout()}
+          className="flex items-center gap-md px-lg py-md rounded-lg w-full
+            font-body text-sm font-[450] text-shade-60 transition-colors
+            [font-feature-settings:'ss03']
+            hover:bg-red-50 hover:text-red-600"
+          aria-label="Keluar dari akun"
+        >
+          <span className="flex-shrink-0"><LogoutIcon /></span>
+          <span>Keluar</span>
+        </button>
+      </div>
     </aside>
   );
 }

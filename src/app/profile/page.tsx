@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod/v4";
 import { Navbar } from "@/components/layout/Navbar";
@@ -11,9 +11,11 @@ import { Modal } from "@/components/ui/Modal";
 import { Avatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
 import { useAuthStore } from "@/stores/authStore";
+import { LocationPicker } from "@/components/map/LocationPicker";
+import type { PickedLocation } from "@/components/map/LocationPicker";
+import api from "@/lib/api";
 
 // --- Zod Schemas ---
-
 const editProfileSchema = z.object({
   name: z.string().min(1, "Nama wajib diisi").trim(),
   email: z.string().email("Email tidak valid"),
@@ -26,57 +28,27 @@ const changePasswordSchema = z
     newPassword: z.string().min(8, "Password baru minimal 8 karakter"),
     confirmPassword: z.string().min(1, "Konfirmasi password wajib diisi"),
   })
-  .refine((data) => data.newPassword !== data.oldPassword, {
+  .refine((d) => d.newPassword !== d.oldPassword, {
     message: "Password baru harus berbeda dari password lama",
     path: ["newPassword"],
   })
-  .refine((data) => data.newPassword === data.confirmPassword, {
+  .refine((d) => d.newPassword === d.confirmPassword, {
     message: "Konfirmasi password tidak cocok",
     path: ["confirmPassword"],
   });
 
-const addressSchema = z.object({
-  label: z.string().min(1, "Label alamat wajib diisi"),
-  address: z.string().min(1, "Alamat wajib diisi"),
-  notes: z.string().optional(),
-});
-
 // --- Types ---
-
 interface Address {
   id: string;
   label: string;
-  address: string;
+  address_line: string;
+  latitude: number;
+  longitude: number;
   notes?: string;
-  isDefault: boolean;
+  is_default: boolean;
 }
 
-// --- Mock Data ---
-
-const mockAddresses: Address[] = [
-  {
-    id: "addr-1",
-    label: "Rumah",
-    address: "Jl. Merdeka No. 10, Kelurahan Sukamaju, Kec. Cibeunying, Bandung 40123",
-    notes: "Dekat masjid Al-Ikhlas",
-    isDefault: true,
-  },
-  {
-    id: "addr-2",
-    label: "Kantor",
-    address: "Jl. Asia Afrika No. 45, Gedung Sate Lt. 3, Bandung 40112",
-    notes: "",
-    isDefault: false,
-  },
-  {
-    id: "addr-3",
-    label: "Kos",
-    address: "Jl. Ganesha No. 12, Kos Putri Melati, Bandung 40132",
-    isDefault: false,
-  },
-];
-
-// --- Component ---
+type AddressStep = "form" | "map";
 
 export default function ProfilePage() {
   const { addToast } = useToast();
@@ -84,76 +56,93 @@ export default function ProfilePage() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
 
-  // Mock user data fallback
-  const profileData = user || {
-    id: "user-1",
-    name: "Siti Nurhaliza",
-    email: "siti.nurhaliza@email.com",
-    phone: "081234567890",
-    role: "buyer" as const,
-    profilePhoto: null,
-    isVerified: true,
+  const profileData = user ?? {
+    id: "", name: "", email: "", phone: "",
+    role: "buyer" as const, profilePhoto: null, isVerified: false,
   };
 
-  // State
-  const [addresses, setAddresses] = useState<Address[]>(mockAddresses);
+  // Addresses state
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [addressLoading, setAddressLoading] = useState(true);
+
+  // Modal states
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
+  const [addressStep, setAddressStep] = useState<AddressStep>("form");
 
-  // Edit Profile form state
+  // Edit Profile form
   const [profileForm, setProfileForm] = useState({
     name: profileData.name,
     email: profileData.email,
     phone: profileData.phone,
   });
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
+  const [profileSaving, setProfileSaving] = useState(false);
 
-  // Change Password form state
+  // Change Password form
   const [passwordForm, setPasswordForm] = useState({
-    oldPassword: "",
-    newPassword: "",
-    confirmPassword: "",
+    oldPassword: "", newPassword: "", confirmPassword: "",
   });
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
 
-  // Address form state
+  // Address form
   const [addressForm, setAddressForm] = useState({
     label: "",
-    address: "",
+    address_line: "",
+    latitude: 0,
+    longitude: 0,
     notes: "",
   });
   const [addressErrors, setAddressErrors] = useState<Record<string, string>>({});
+  const [addressSaving, setAddressSaving] = useState(false);
 
-  // --- Handlers ---
+  // Load addresses from API
+  useEffect(() => {
+    async function fetchAddresses() {
+      try {
+        const res = await api.get("/buyer/addresses");
+        setAddresses(res.data.data ?? []);
+      } catch {
+        // silent
+      } finally {
+        setAddressLoading(false);
+      }
+    }
+    if (user?.role === "buyer") fetchAddresses();
+    else setAddressLoading(false);
+  }, [user]);
 
+  // --- Profile handlers ---
   function handleEditProfile() {
-    setProfileForm({
-      name: profileData.name,
-      email: profileData.email,
-      phone: profileData.phone,
-    });
+    setProfileForm({ name: profileData.name, email: profileData.email, phone: profileData.phone });
     setProfileErrors({});
     setEditProfileOpen(true);
   }
 
-  function handleSaveProfile() {
+  async function handleSaveProfile() {
     const result = editProfileSchema.safeParse(profileForm);
     if (!result.success) {
       const errors: Record<string, string> = {};
       for (const issue of result.error.issues) {
-        const path = issue.path[0];
-        if (path) errors[String(path)] = issue.message;
+        if (issue.path[0]) errors[String(issue.path[0])] = issue.message;
       }
       setProfileErrors(errors);
       return;
     }
-    setProfileErrors({});
-    setEditProfileOpen(false);
-    addToast("Profil berhasil diperbarui", "success");
+    setProfileSaving(true);
+    try {
+      // TODO: connect to /api/buyer/profile PATCH when available
+      setProfileErrors({});
+      setEditProfileOpen(false);
+      addToast("Profil berhasil diperbarui", "success");
+    } finally {
+      setProfileSaving(false);
+    }
   }
 
+  // --- Password handlers ---
   function handleChangePassword() {
     setPasswordForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
     setPasswordErrors({});
@@ -165,8 +154,7 @@ export default function ProfilePage() {
     if (!result.success) {
       const errors: Record<string, string> = {};
       for (const issue of result.error.issues) {
-        const path = issue.path[0];
-        if (path) errors[String(path)] = issue.message;
+        if (issue.path[0]) errors[String(issue.path[0])] = issue.message;
       }
       setPasswordErrors(errors);
       return;
@@ -176,66 +164,96 @@ export default function ProfilePage() {
     addToast("Password berhasil diubah", "success");
   }
 
+  // --- Address handlers ---
   function handleAddAddress() {
     setEditingAddress(null);
-    setAddressForm({ label: "", address: "", notes: "" });
+    setAddressForm({ label: "", address_line: "", latitude: 0, longitude: 0, notes: "" });
     setAddressErrors({});
+    setAddressStep("form");
     setAddressModalOpen(true);
   }
 
   function handleEditAddress(addr: Address) {
     setEditingAddress(addr);
-    setAddressForm({ label: addr.label, address: addr.address, notes: addr.notes || "" });
+    setAddressForm({
+      label: addr.label,
+      address_line: addr.address_line,
+      latitude: Number(addr.latitude),
+      longitude: Number(addr.longitude),
+      notes: addr.notes ?? "",
+    });
     setAddressErrors({});
+    setAddressStep("form");
     setAddressModalOpen(true);
   }
 
-  function handleSaveAddress() {
-    const result = addressSchema.safeParse(addressForm);
-    if (!result.success) {
-      const errors: Record<string, string> = {};
-      for (const issue of result.error.issues) {
-        const path = issue.path[0];
-        if (path) errors[String(path)] = issue.message;
-      }
-      setAddressErrors(errors);
+  function handleLocationPicked(loc: PickedLocation) {
+    setAddressForm((f) => ({
+      ...f,
+      address_line: loc.address || f.address_line,
+      latitude: loc.lat,
+      longitude: loc.lng,
+    }));
+    setAddressStep("form");
+  }
+
+  async function handleSaveAddress() {
+    if (!addressForm.label.trim()) {
+      setAddressErrors({ label: "Label alamat wajib diisi" });
       return;
     }
-    setAddressErrors({});
-
-    if (editingAddress) {
-      setAddresses((prev) =>
-        prev.map((a) =>
-          a.id === editingAddress.id
-            ? { ...a, label: addressForm.label, address: addressForm.address, notes: addressForm.notes }
-            : a
-        )
-      );
-      addToast("Alamat berhasil diperbarui", "success");
-    } else {
-      const newAddr: Address = {
-        id: `addr-${Date.now()}`,
-        label: addressForm.label,
-        address: addressForm.address,
-        notes: addressForm.notes,
-        isDefault: addresses.length === 0,
-      };
-      setAddresses((prev) => [...prev, newAddr]);
-      addToast("Alamat berhasil ditambahkan", "success");
+    if (!addressForm.address_line.trim()) {
+      setAddressErrors({ address_line: "Alamat wajib diisi" });
+      return;
     }
-    setAddressModalOpen(false);
+
+    setAddressSaving(true);
+    try {
+      if (editingAddress) {
+        const res = await api.put("/buyer/addresses", {
+          id: editingAddress.id,
+          ...addressForm,
+        });
+        setAddresses((prev) =>
+          prev.map((a) => (a.id === editingAddress.id ? res.data.data : a))
+        );
+        addToast("Alamat berhasil diperbarui", "success");
+      } else {
+        const res = await api.post("/buyer/addresses", addressForm);
+        setAddresses((prev) => [...prev, res.data.data]);
+        addToast("Alamat berhasil ditambahkan", "success");
+      }
+      setAddressModalOpen(false);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? "Gagal menyimpan alamat";
+      addToast(msg, "error");
+    } finally {
+      setAddressSaving(false);
+    }
   }
 
-  function handleDeleteAddress(id: string) {
-    setAddresses((prev) => prev.filter((a) => a.id !== id));
-    addToast("Alamat berhasil dihapus", "success");
+  async function handleDeleteAddress(id: string) {
+    try {
+      await api.delete(`/buyer/addresses?id=${id}`);
+      setAddresses((prev) => prev.filter((a) => a.id !== id));
+      addToast("Alamat berhasil dihapus", "success");
+    } catch {
+      addToast("Gagal menghapus alamat", "error");
+    }
   }
 
-  function handleSetDefault(id: string) {
-    setAddresses((prev) =>
-      prev.map((a) => ({ ...a, isDefault: a.id === id }))
-    );
-    addToast("Alamat default berhasil diubah", "success");
+  async function handleSetDefault(id: string) {
+    try {
+      await api.put("/buyer/addresses", { id, is_default: true });
+      setAddresses((prev) =>
+        prev.map((a) => ({ ...a, is_default: a.id === id }))
+      );
+      addToast("Alamat default berhasil diubah", "success");
+    } catch {
+      addToast("Gagal mengubah alamat default", "error");
+    }
   }
 
   function handleLogout() {
@@ -256,11 +274,7 @@ export default function ProfilePage() {
         {/* Profile Header */}
         <Card variant="default" className="mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <Avatar
-              src={profileData.profilePhoto}
-              name={profileData.name}
-              size="lg"
-            />
+            <Avatar src={profileData.profilePhoto} name={profileData.name} size="lg" />
             <div className="flex-1">
               <h2 className="font-display text-[20px] font-[500] leading-[1.4] text-ink [font-feature-settings:'ss03']">
                 {profileData.name}
@@ -294,7 +308,13 @@ export default function ProfilePage() {
             </Button>
           </div>
 
-          {addresses.length === 0 ? (
+          {addressLoading ? (
+            <div className="space-y-3 animate-pulse">
+              {[...Array(2)].map((_, i) => (
+                <div key={i} className="h-20 bg-shade-10 rounded-lg" />
+              ))}
+            </div>
+          ) : addresses.length === 0 ? (
             <Card variant="default">
               <p className="text-shade-50 text-center py-4 font-body text-[14px] [font-feature-settings:'ss03']">
                 Belum ada alamat tersimpan. Tambahkan alamat pertama Anda.
@@ -310,43 +330,36 @@ export default function ProfilePage() {
                         <span className="font-body text-[14px] font-[550] text-ink [font-feature-settings:'ss03']">
                           {addr.label}
                         </span>
-                        {addr.isDefault && (
+                        {addr.is_default && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-pill bg-aloe-10 text-ink text-[11px] font-[500] [font-feature-settings:'ss03']">
                             Default
                           </span>
                         )}
                       </div>
                       <p className="text-[14px] text-shade-60 font-body leading-[1.5] [font-feature-settings:'ss03']">
-                        {addr.address}
+                        {addr.address_line}
                       </p>
                       {addr.notes && (
                         <p className="text-[12px] text-shade-40 font-body mt-1 [font-feature-settings:'ss03']">
                           Catatan: {addr.notes}
                         </p>
                       )}
+                      {addr.latitude !== 0 && (
+                        <p className="text-[11px] text-shade-40 mt-0.5">
+                          📍 {addr.latitude.toFixed(5)}, {addr.longitude.toFixed(5)}
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-2 flex-wrap shrink-0">
-                      {!addr.isDefault && (
-                        <Button
-                          variant="outline-light"
-                          size="sm"
-                          onClick={() => handleSetDefault(addr.id)}
-                        >
+                      {!addr.is_default && (
+                        <Button variant="outline-light" size="sm" onClick={() => handleSetDefault(addr.id)}>
                           Set Default
                         </Button>
                       )}
-                      <Button
-                        variant="outline-light"
-                        size="sm"
-                        onClick={() => handleEditAddress(addr)}
-                      >
+                      <Button variant="outline-light" size="sm" onClick={() => handleEditAddress(addr)}>
                         Edit
                       </Button>
-                      <Button
-                        variant="outline-light"
-                        size="sm"
-                        onClick={() => handleDeleteAddress(addr.id)}
-                      >
+                      <Button variant="outline-light" size="sm" onClick={() => handleDeleteAddress(addr.id)}>
                         Hapus
                       </Button>
                     </div>
@@ -366,119 +379,114 @@ export default function ProfilePage() {
       </main>
 
       {/* Edit Profile Modal */}
-      <Modal
-        isOpen={editProfileOpen}
-        onClose={() => setEditProfileOpen(false)}
-        title="Edit Profil"
-      >
+      <Modal isOpen={editProfileOpen} onClose={() => setEditProfileOpen(false)} title="Edit Profil">
         <div className="flex flex-col gap-4">
-          <Input
-            label="Nama Lengkap"
-            value={profileForm.name}
+          <Input label="Nama Lengkap" value={profileForm.name}
             onChange={(e) => setProfileForm((f) => ({ ...f, name: e.target.value }))}
-            error={profileErrors.name}
-          />
-          <Input
-            label="Email"
-            type="email"
-            value={profileForm.email}
+            error={profileErrors.name} />
+          <Input label="Email" type="email" value={profileForm.email}
             onChange={(e) => setProfileForm((f) => ({ ...f, email: e.target.value }))}
-            error={profileErrors.email}
-          />
-          <Input
-            label="No. Telepon"
-            type="tel"
-            value={profileForm.phone}
+            error={profileErrors.email} />
+          <Input label="No. Telepon" type="tel" value={profileForm.phone}
             onChange={(e) => setProfileForm((f) => ({ ...f, phone: e.target.value }))}
-            error={profileErrors.phone}
-          />
+            error={profileErrors.phone} />
           <div className="flex gap-3 justify-end mt-2">
-            <Button variant="outline-light" size="sm" onClick={() => setEditProfileOpen(false)}>
-              Batal
-            </Button>
-            <Button variant="primary" size="sm" onClick={handleSaveProfile}>
-              Simpan
-            </Button>
+            <Button variant="outline-light" size="sm" onClick={() => setEditProfileOpen(false)}>Batal</Button>
+            <Button variant="primary" size="sm" onClick={handleSaveProfile} loading={profileSaving}>Simpan</Button>
           </div>
         </div>
       </Modal>
 
       {/* Change Password Modal */}
-      <Modal
-        isOpen={changePasswordOpen}
-        onClose={() => setChangePasswordOpen(false)}
-        title="Ubah Password"
-      >
+      <Modal isOpen={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} title="Ubah Password">
         <div className="flex flex-col gap-4">
-          <Input
-            label="Password Lama"
-            type="password"
-            value={passwordForm.oldPassword}
+          <Input label="Password Lama" type="password" value={passwordForm.oldPassword}
             onChange={(e) => setPasswordForm((f) => ({ ...f, oldPassword: e.target.value }))}
-            error={passwordErrors.oldPassword}
-          />
-          <Input
-            label="Password Baru"
-            type="password"
-            value={passwordForm.newPassword}
+            error={passwordErrors.oldPassword} />
+          <Input label="Password Baru" type="password" value={passwordForm.newPassword}
             onChange={(e) => setPasswordForm((f) => ({ ...f, newPassword: e.target.value }))}
-            error={passwordErrors.newPassword}
-          />
-          <Input
-            label="Konfirmasi Password Baru"
-            type="password"
-            value={passwordForm.confirmPassword}
+            error={passwordErrors.newPassword} />
+          <Input label="Konfirmasi Password Baru" type="password" value={passwordForm.confirmPassword}
             onChange={(e) => setPasswordForm((f) => ({ ...f, confirmPassword: e.target.value }))}
-            error={passwordErrors.confirmPassword}
-          />
+            error={passwordErrors.confirmPassword} />
           <div className="flex gap-3 justify-end mt-2">
-            <Button variant="outline-light" size="sm" onClick={() => setChangePasswordOpen(false)}>
-              Batal
-            </Button>
-            <Button variant="primary" size="sm" onClick={handleSavePassword}>
-              Ubah Password
-            </Button>
+            <Button variant="outline-light" size="sm" onClick={() => setChangePasswordOpen(false)}>Batal</Button>
+            <Button variant="primary" size="sm" onClick={handleSavePassword}>Ubah Password</Button>
           </div>
         </div>
       </Modal>
 
-      {/* Address Modal (Add/Edit) */}
+      {/* Address Modal */}
       <Modal
         isOpen={addressModalOpen}
         onClose={() => setAddressModalOpen(false)}
         title={editingAddress ? "Edit Alamat" : "Tambah Alamat"}
       >
-        <div className="flex flex-col gap-4">
-          <Input
-            label="Label Alamat"
-            placeholder="Contoh: Rumah, Kantor, Kos"
-            value={addressForm.label}
-            onChange={(e) => setAddressForm((f) => ({ ...f, label: e.target.value }))}
-            error={addressErrors.label}
+        {addressStep === "map" ? (
+          <LocationPicker
+            initialLocation={
+              addressForm.latitude !== 0
+                ? { lat: addressForm.latitude, lng: addressForm.longitude }
+                : undefined
+            }
+            onConfirm={handleLocationPicked}
+            onCancel={() => setAddressStep("form")}
           />
-          <Input
-            label="Alamat Lengkap"
-            placeholder="Jl. Contoh No. 1, Kota"
-            value={addressForm.address}
-            onChange={(e) => setAddressForm((f) => ({ ...f, address: e.target.value }))}
-            error={addressErrors.address}
-          />
-          <Input
-            label="Catatan (opsional)"
-            placeholder="Patokan atau catatan tambahan"
-            value={addressForm.notes}
-            onChange={(e) => setAddressForm((f) => ({ ...f, notes: e.target.value }))}
-            error={addressErrors.notes}
-          />
-          <div className="flex gap-3 justify-end mt-2">
-            <Button variant="outline-light" size="sm" onClick={() => setAddressModalOpen(false)}>
-              Batal
-            </Button>
-            <Button variant="primary" size="sm" onClick={handleSaveAddress}>
-              {editingAddress ? "Simpan" : "Tambah"}
-            </Button>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <Input
+              label="Label Alamat"
+              placeholder="Contoh: Rumah, Kantor, Kos"
+              value={addressForm.label}
+              onChange={(e) => setAddressForm((f) => ({ ...f, label: e.target.value }))}
+              error={addressErrors.label}
+            />
+
+            {/* Tombol pilih dari peta */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[14px] font-[500] leading-[1.49] tracking-[0.28px] text-ink">
+                Lokasi
+              </label>
+              <Button
+                variant="outline-light"
+                size="sm"
+                onClick={() => setAddressStep("map")}
+                className="self-start gap-2"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {addressForm.latitude !== 0 ? "Ubah Lokasi di Peta" : "Pilih Lokasi dari Peta"}
+              </Button>
+              {addressForm.latitude !== 0 && (
+                <p className="text-[12px] text-shade-50">
+                  📍 {addressForm.latitude.toFixed(5)}, {addressForm.longitude.toFixed(5)}
+                </p>
+              )}
+            </div>
+
+            <Input
+              label="Alamat Lengkap"
+              placeholder="Jl. Contoh No. 1, Kota"
+              value={addressForm.address_line}
+              onChange={(e) => setAddressForm((f) => ({ ...f, address_line: e.target.value }))}
+              error={addressErrors.address_line}
+            />
+            <Input
+              label="Catatan (opsional)"
+              placeholder="Patokan atau catatan tambahan"
+              value={addressForm.notes}
+              onChange={(e) => setAddressForm((f) => ({ ...f, notes: e.target.value }))}
+            />
+            <div className="flex gap-3 justify-end mt-2">
+              <Button variant="outline-light" size="sm" onClick={() => setAddressModalOpen(false)}>Batal</Button>
+              <Button variant="primary" size="sm" onClick={handleSaveAddress} loading={addressSaving}>
+                {editingAddress ? "Simpan" : "Tambah"}
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </Modal>
     </div>
   );

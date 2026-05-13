@@ -22,11 +22,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
   isAuthenticated: false,
 
   login: async (credentials: LoginCredentials) => {
-    // Import api lazily to avoid circular dependencies
     const { default: api } = await import('@/lib/api')
 
     const response = await api.post('/auth/login', credentials)
-    const { user, token } = response.data
+    // API response format: { success, data: { user, token }, message }
+    const payload = response.data.data ?? response.data
+    const { user, token } = payload
 
     set({
       user,
@@ -60,7 +61,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
     try {
       const { default: api } = await import('@/lib/api')
       const response = await api.post('/auth/refresh')
-      const { user, token } = response.data
+      const payload = response.data.data ?? response.data
+      const { user, token } = payload
 
       set({
         user,

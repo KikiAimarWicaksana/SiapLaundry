@@ -4,101 +4,43 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { LaundryFilter, FilterState } from "@/components/laundry/LaundryFilter";
 import { LaundryGrid } from "@/components/laundry/LaundryGrid";
+import { NearbyLaundriesMap } from "@/components/map/NearbyLaundriesMap";
 import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { LaundryCardProps } from "@/components/laundry/LaundryCard";
+import api from "@/lib/api";
 
-// --- Mock Data ---
-const MOCK_LAUNDRIES: LaundryCardProps[] = [
-  {
-    id: "1",
-    name: "Laundry Bersih Cemerlang",
-    photos: ["/placeholder-laundry.jpg"],
-    averageRating: 4.8,
-    totalReviews: 124,
-    distanceKm: 1.2,
-    startingPrice: 7000,
-    isOpen: true,
-    services: ["Cuci Kering", "Cuci Setrika", "Setrika Saja"],
-  },
-  {
-    id: "2",
-    name: "Super Clean Laundry",
-    photos: ["/placeholder-laundry.jpg"],
-    averageRating: 4.5,
-    totalReviews: 89,
-    distanceKm: 2.4,
-    startingPrice: 6000,
-    isOpen: true,
-    services: ["Cuci Kering", "Cuci Setrika", "Dry Clean"],
-  },
-  {
-    id: "3",
-    name: "Laundry Express Kilat",
-    photos: ["/placeholder-laundry.jpg"],
-    averageRating: 4.2,
-    totalReviews: 56,
-    distanceKm: 3.1,
-    startingPrice: 8000,
-    isOpen: false,
-    services: ["Cuci Setrika", "Setrika Saja"],
-  },
-  {
-    id: "4",
-    name: "Wangi Laundry & Dry Clean",
-    photos: ["/placeholder-laundry.jpg"],
-    averageRating: 4.9,
-    totalReviews: 210,
-    distanceKm: 0.8,
-    startingPrice: 9000,
-    isOpen: true,
-    services: ["Cuci Kering", "Cuci Setrika", "Dry Clean", "Setrika Saja"],
-  },
-  {
-    id: "5",
-    name: "Laundry Murah Meriah",
-    photos: ["/placeholder-laundry.jpg"],
-    averageRating: 3.8,
-    totalReviews: 42,
-    distanceKm: 4.5,
-    startingPrice: 5000,
-    isOpen: true,
-    services: ["Cuci Kering", "Cuci Setrika"],
-  },
-  {
-    id: "6",
-    name: "Laundry Sejahtera",
-    photos: ["/placeholder-laundry.jpg"],
-    averageRating: 4.0,
-    totalReviews: 67,
-    distanceKm: 5.8,
-    startingPrice: 6500,
-    isOpen: true,
-    services: ["Cuci Setrika", "Setrika Saja", "Dry Clean"],
-  },
-  {
-    id: "7",
-    name: "Queen Laundry Bandung",
-    photos: ["/placeholder-laundry.jpg"],
-    averageRating: 3.5,
-    totalReviews: 31,
-    distanceKm: 7.2,
-    startingPrice: 5500,
-    isOpen: false,
-    services: ["Cuci Kering", "Setrika Saja"],
-  },
-  {
-    id: "8",
-    name: "Fresh & Clean Laundry",
-    photos: ["/placeholder-laundry.jpg"],
-    averageRating: 4.6,
-    totalReviews: 98,
-    distanceKm: 1.9,
-    startingPrice: 7500,
-    isOpen: true,
-    services: ["Cuci Kering", "Cuci Setrika", "Dry Clean"],
-  },
-];
+// --- API Response Types ---
+interface ApiLaundry {
+  id: string;
+  name: string;
+  photos: string[];
+  averageRating: number;
+  totalReviews: number;
+  startingPrice: number;
+  isOpen: boolean;
+  services: string[];
+  latitude: number;
+  longitude: number;
+}
+
+// --- Geolocation helper: Haversine distance in km ---
+function haversineDistance(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 6371; // km
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 // --- Filter Logic ---
 function applyFilters(
@@ -108,32 +50,21 @@ function applyFilters(
 ): LaundryCardProps[] {
   let result = [...laundries];
 
-  // Search filter: by name or address (using name here since mock data has no address field)
   if (searchTerm.trim()) {
     const term = searchTerm.toLowerCase();
-    result = result.filter(
-      (l) => l.name.toLowerCase().includes(term)
-    );
+    result = result.filter((l) => l.name.toLowerCase().includes(term));
   }
-
-  // Distance filter
   if (filters.distance !== null) {
     result = result.filter((l) => l.distanceKm <= filters.distance!);
   }
-
-  // Rating filter
   if (filters.minRating !== null) {
     result = result.filter((l) => l.averageRating >= filters.minRating!);
   }
-
-  // Service filter
   if (filters.services.length > 0) {
     result = result.filter((l) =>
       filters.services.some((service) => l.services.includes(service))
     );
   }
-
-  // Price sort
   if (filters.priceSort === "asc") {
     result.sort((a, b) => a.startingPrice - b.startingPrice);
   } else if (filters.priceSort === "desc") {
@@ -143,15 +74,18 @@ function applyFilters(
   return result;
 }
 
-// --- Geolocation Status ---
 type GeoStatus = "idle" | "requesting" | "granted" | "denied";
 
 export default function ExplorePage() {
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [laundries, setLaundries] = useState<LaundryCardProps[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [manualLocation, setManualLocation] = useState("");
+  const [showMap, setShowMap] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     distance: null,
     minRating: null,
@@ -159,17 +93,64 @@ export default function ExplorePage() {
     services: [],
   });
 
-  // Simulate loading state
+  // Fetch laundries from API
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 1000);
-    return () => clearTimeout(timer);
-  }, []);
+    let cancelled = false;
+
+    async function fetchLaundries() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await api.get<{ success: boolean; data: ApiLaundry[] }>("/laundry");
+        if (cancelled) return;
+
+        const raw = res.data.data ?? [];
+
+        const mapped: LaundryCardProps[] = raw.map((l) => {
+          const distanceKm = userLocation
+            ? haversineDistance(
+                userLocation.lat,
+                userLocation.lng,
+                l.latitude,
+                l.longitude
+              )
+            : 0;
+          return {
+            id: l.id,
+            name: l.name,
+            photos: l.photos.length > 0 ? l.photos : ["/placeholder-laundry.jpg"],
+            averageRating: l.averageRating,
+            totalReviews: l.totalReviews,
+            distanceKm,
+            startingPrice: l.startingPrice,
+            isOpen: l.isOpen,
+            services: l.services,
+            // simpan koordinat untuk peta
+            latitude: l.latitude,
+            longitude: l.longitude,
+          } as LaundryCardProps & { latitude: number; longitude: number };
+        });
+
+        setLaundries(mapped);
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setError("Gagal memuat data laundry. Silakan coba lagi.");
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    fetchLaundries();
+    return () => {
+      cancelled = true;
+    };
+  }, [userLocation]);
 
   // Debounce search input (300ms)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-    }, 300);
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
@@ -182,8 +163,9 @@ export default function ExplorePage() {
 
     setGeoStatus("requesting");
     navigator.geolocation.getCurrentPosition(
-      () => {
+      (pos) => {
         setGeoStatus("granted");
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       () => {
         setGeoStatus("denied");
@@ -191,10 +173,9 @@ export default function ExplorePage() {
     );
   }, []);
 
-  // Filter results
   const filteredLaundries = useMemo(
-    () => applyFilters(MOCK_LAUNDRIES, filters, debouncedSearch),
-    [filters, debouncedSearch]
+    () => applyFilters(laundries, filters, debouncedSearch),
+    [laundries, filters, debouncedSearch]
   );
 
   const handleFilterChange = useCallback((newFilters: FilterState) => {
@@ -215,9 +196,9 @@ export default function ExplorePage() {
       <Navbar variant="light" />
 
       <main className="max-w-[1280px] mx-auto px-xl py-xl">
-        {/* Search Bar */}
-        <div className="mb-6">
-          <div className="relative">
+        {/* Search Bar + Toggle Peta */}
+        <div className="mb-6 flex gap-3 items-center">
+          <div className="relative flex-1">
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 text-shade-50"
               width="20"
@@ -253,7 +234,46 @@ export default function ExplorePage() {
               aria-label="Cari laundry"
             />
           </div>
+          {/* Toggle tampilan peta */}
+          <Button
+            variant={showMap ? "primary" : "outline-light"}
+            size="md"
+            onClick={() => setShowMap((v) => !v)}
+            className="shrink-0 gap-2"
+            aria-pressed={showMap}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+            </svg>
+            {showMap ? "Sembunyikan Peta" : "Tampilkan Peta"}
+          </Button>
         </div>
+
+        {/* Status lokasi */}
+        {geoStatus === "requesting" && (
+          <div className="mb-4 flex items-center gap-2 text-[13px] text-shade-50">
+            <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Mengambil lokasi Anda...
+          </div>
+        )}
+        {geoStatus === "granted" && userLocation && (
+          <div className="mb-4 flex items-center gap-2 text-[13px] text-green-700">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Menampilkan laundry terdekat dari lokasi Anda
+          </div>
+        )}
+
+        {/* Error message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-[14px]">
+            {error}
+          </div>
+        )}
 
         {/* Geolocation fallback: manual location input */}
         {geoStatus === "denied" && (
@@ -270,9 +290,27 @@ export default function ExplorePage() {
           </div>
         )}
 
+        {/* Peta laundry terdekat */}
+        {showMap && (
+          <div className="mb-6">
+            <NearbyLaundriesMap
+              laundries={filteredLaundries.map((l) => ({
+                id: l.id,
+                name: l.name,
+                latitude: (l as LaundryCardProps & { latitude?: number }).latitude ?? 0,
+                longitude: (l as LaundryCardProps & { longitude?: number }).longitude ?? 0,
+                averageRating: l.averageRating,
+                isOpen: l.isOpen,
+                distanceKm: l.distanceKm,
+              }))}
+              userLocation={userLocation}
+              height="420px"
+            />
+          </div>
+        )}
+
         {/* Main Content: Filter + Grid */}
         <div className="flex flex-col md:flex-row gap-6">
-          {/* Filter Sidebar */}
           <div className="w-full md:w-[280px] md:flex-shrink-0">
             {isLoading ? (
               <div className="flex flex-col gap-4 p-4">
@@ -291,7 +329,6 @@ export default function ExplorePage() {
             )}
           </div>
 
-          {/* Laundry Grid */}
           <div className="flex-1">
             {isLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

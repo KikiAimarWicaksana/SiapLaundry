@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { formatCurrency } from "@/lib/utils";
+import api from "@/lib/api";
 
-// Mock data
-const driverStats = {
-  ordersToday: 5,
-  totalDeliveries: 87,
-  monthlyEarnings: 3250000,
-};
+interface DriverStats {
+  isOnline: boolean;
+  ordersToday: number;
+  totalDeliveries: number;
+  monthlyEarnings: number;
+  averageRating: number;
+}
 
 function OrderIcon() {
   return (
@@ -38,7 +40,40 @@ function EarningsIcon() {
 }
 
 export default function DriverDashboardPage() {
-  const [isOnline, setIsOnline] = useState(false);
+  const [stats, setStats] = useState<DriverStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState(false);
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const res = await api.get("/driver/dashboard");
+        setStats(res.data.data);
+      } catch {
+        // silently fail, show zeros
+        setStats({ isOnline: false, ordersToday: 0, totalDeliveries: 0, monthlyEarnings: 0, averageRating: 0 });
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchStats();
+  }, []);
+
+  const handleToggleOnline = async () => {
+    if (!stats || toggling) return;
+    setToggling(true);
+    const newStatus = !stats.isOnline;
+    try {
+      await api.patch("/driver/dashboard", { isOnline: newStatus });
+      setStats((prev) => prev ? { ...prev, isOnline: newStatus } : prev);
+    } catch {
+      // revert on error
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const isOnline = stats?.isOnline ?? false;
 
   return (
     <div>
@@ -50,12 +85,13 @@ export default function DriverDashboardPage() {
       <div className="mb-8">
         <button
           type="button"
-          onClick={() => setIsOnline(!isOnline)}
+          onClick={handleToggleOnline}
+          disabled={loading || toggling}
           className={[
             "w-full flex items-center justify-between",
             "rounded-lg px-6 py-5",
             "transition-colors duration-200",
-            "cursor-pointer",
+            "cursor-pointer disabled:opacity-60",
             isOnline ? "bg-aloe-10" : "bg-shade-30",
           ].join(" ")}
           aria-pressed={isOnline}
@@ -63,29 +99,19 @@ export default function DriverDashboardPage() {
         >
           <div className="flex items-center gap-3">
             <div
-              className={[
-                "w-3 h-3 rounded-full",
-                isOnline ? "bg-green-500" : "bg-shade-50",
-              ].join(" ")}
+              className={["w-3 h-3 rounded-full", isOnline ? "bg-green-500" : "bg-shade-50"].join(" ")}
               aria-hidden="true"
             />
             <span className="text-[18px] font-[600] text-ink">
-              {isOnline ? "Online" : "Offline"}
+              {toggling ? "Memperbarui..." : isOnline ? "Online" : "Offline"}
             </span>
           </div>
-          {/* Toggle switch visual */}
           <div
-            className={[
-              "relative w-[52px] h-[28px] rounded-pill transition-colors duration-200",
-              isOnline ? "bg-green-500" : "bg-shade-50",
-            ].join(" ")}
+            className={["relative w-[52px] h-[28px] rounded-pill transition-colors duration-200", isOnline ? "bg-green-500" : "bg-shade-50"].join(" ")}
             aria-hidden="true"
           >
             <div
-              className={[
-                "absolute top-[3px] w-[22px] h-[22px] rounded-full bg-white transition-transform duration-200",
-                isOnline ? "translate-x-[27px]" : "translate-x-[3px]",
-              ].join(" ")}
+              className={["absolute top-[3px] w-[22px] h-[22px] rounded-full bg-white transition-transform duration-200", isOnline ? "translate-x-[27px]" : "translate-x-[3px]"].join(" ")}
             />
           </div>
         </button>
@@ -98,47 +124,46 @@ export default function DriverDashboardPage() {
 
       {/* Widget Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Order Hari Ini */}
-        <Card variant="default" className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-[500] text-shade-50 tracking-[0.28px]">
-              Order Hari Ini
-            </span>
-            <OrderIcon />
-          </div>
-          <p className="font-display text-[32px] font-[500] leading-none text-ink">
-            {driverStats.ordersToday}
-          </p>
-          <p className="text-[12px] text-shade-50">Pickup &amp; Delivery</p>
-        </Card>
+        {loading ? (
+          [...Array(3)].map((_, i) => (
+            <Card key={i} variant="default" className="animate-pulse h-28" />
+          ))
+        ) : (
+          <>
+            <Card variant="default" className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-[500] text-shade-50 tracking-[0.28px]">Order Hari Ini</span>
+                <OrderIcon />
+              </div>
+              <p className="font-display text-[32px] font-[500] leading-none text-ink">
+                {stats?.ordersToday ?? 0}
+              </p>
+              <p className="text-[12px] text-shade-50">Pickup &amp; Delivery</p>
+            </Card>
 
-        {/* Total Pengantaran */}
-        <Card variant="default" className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-[500] text-shade-50 tracking-[0.28px]">
-              Total Pengantaran
-            </span>
-            <DeliveryIcon />
-          </div>
-          <p className="font-display text-[32px] font-[500] leading-none text-ink">
-            {driverStats.totalDeliveries}
-          </p>
-          <p className="text-[12px] text-shade-50">Bulan ini</p>
-        </Card>
+            <Card variant="default" className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-[500] text-shade-50 tracking-[0.28px]">Total Pengantaran</span>
+                <DeliveryIcon />
+              </div>
+              <p className="font-display text-[32px] font-[500] leading-none text-ink">
+                {stats?.totalDeliveries ?? 0}
+              </p>
+              <p className="text-[12px] text-shade-50">Sepanjang waktu</p>
+            </Card>
 
-        {/* Pendapatan */}
-        <Card variant="default" className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-[500] text-shade-50 tracking-[0.28px]">
-              Pendapatan
-            </span>
-            <EarningsIcon />
-          </div>
-          <p className="font-display text-[28px] font-[500] leading-none text-ink">
-            {formatCurrency(driverStats.monthlyEarnings)}
-          </p>
-          <p className="text-[12px] text-shade-50">Bulan ini</p>
-        </Card>
+            <Card variant="default" className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-[500] text-shade-50 tracking-[0.28px]">Pendapatan</span>
+                <EarningsIcon />
+              </div>
+              <p className="font-display text-[28px] font-[500] leading-none text-ink">
+                {formatCurrency(stats?.monthlyEarnings ?? 0)}
+              </p>
+              <p className="text-[12px] text-shade-50">Bulan ini</p>
+            </Card>
+          </>
+        )}
       </div>
     </div>
   );

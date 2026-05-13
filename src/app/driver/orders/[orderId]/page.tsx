@@ -1,32 +1,41 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
+import { useParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { OrderStatusBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { TrackingMap } from "@/components/map/TrackingMap";
 import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
+import api from "@/lib/api";
 
-// Mock data for a single driver order detail
-const orderDetail = {
-  id: "ord-101",
-  orderNumber: "SL20260601001",
-  status: "driver_on_way_pickup" as const,
-  type: "pickup" as const, // "pickup" | "delivery"
-  buyer: {
-    name: "Andi Pratama",
-    phone: "081234567890",
-    avatar: null,
-  },
-  address: "Jl. Merdeka No. 45, RT 03/RW 05, Kelurahan Citarum, Kecamatan Bandung Wetan, Bandung 40115",
-  latitude: -6.9175,
-  longitude: 107.6191,
-  laundryName: "Fresh Laundry",
-  service: "Cuci Setrika",
-  estimatedWeight: 5,
-  deliveryFee: 10000,
-  notes: "Tolong hati-hati dengan baju putih, jangan dicampur.",
-  createdAt: "2026-06-01T10:30:00Z",
+interface DriverOrderDetail {
+  id: string;
+  orderNumber: string;
+  status: string;
+  type: "pickup" | "delivery";
+  buyer: { name: string; phone: string };
+  address: string;
+  latitude: number;
+  longitude: number;
+  laundryName: string;
+  laundryAddress: string;
+  laundryLatitude: number;
+  laundryLongitude: number;
+  service: string;
+  estimatedWeight: number | null;
+  deliveryFee: number;
+  buyerNotes: string | null;
+  createdAt: string;
+}
+
+const STATUS_ACTIONS: Record<string, { label: string; nextStatus: string }> = {
+  pending_pickup: { label: "Mulai Menuju Lokasi Pickup", nextStatus: "driver_on_way_pickup" },
+  driver_on_way_pickup: { label: "Konfirmasi Sudah Pickup", nextStatus: "picked_up" },
+  picked_up: { label: "Antar ke Laundry", nextStatus: "at_laundry" },
+  ready_for_delivery: { label: "Mulai Menuju Lokasi Delivery", nextStatus: "driver_on_way_delivery" },
+  driver_on_way_delivery: { label: "Konfirmasi Sudah Diantar", nextStatus: "delivered" },
 };
 
 function PhoneIcon() {
@@ -45,14 +54,6 @@ function ChatIcon() {
   );
 }
 
-function MapIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
-    </svg>
-  );
-}
-
 function LocationIcon() {
   return (
     <svg className="h-5 w-5 text-shade-50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
@@ -62,26 +63,109 @@ function LocationIcon() {
   );
 }
 
-function getStatusAction(status: string, type: string) {
-  if (type === "pickup") {
-    if (status === "pending_pickup") return "Ambil Order";
-    if (status === "driver_on_way_pickup") return "Konfirmasi Pickup";
-    if (status === "picked_up") return "Antar ke Laundry";
-  }
-  if (type === "delivery") {
-    if (status === "ready_for_delivery") return "Ambil dari Laundry";
-    if (status === "driver_on_way_delivery") return "Konfirmasi Delivery";
-  }
-  return null;
-}
-
 export default function DriverOrderDetailPage() {
-  const actionLabel = getStatusAction(orderDetail.status, orderDetail.type);
-  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${orderDetail.latitude},${orderDetail.longitude}`;
+  const { orderId } = useParams<{ orderId: string }>();
+  const [order, setOrder] = useState<DriverOrderDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [updating, setUpdating] = useState(false);
+  const [driverPosition, setDriverPosition] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    async function fetchOrder() {
+      try {
+        const res = await api.get(`/driver/orders/${orderId}`);
+        setOrder(res.data.data);
+      } catch {
+        setError("Gagal memuat detail order.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchOrder();
+  }, [orderId]);
+
+  // Kirim posisi GPS kurir ke server setiap 10 detik saat sedang dalam perjalanan
+  const sendLocation = useCallback(async (lat: number, lng: number) => {
+    try {
+      await api.patch(`/driver/orders/${orderId}`, {
+        currentLatitude: lat,
+        currentLongitude: lng,
+      });
+    } catch {
+      // silent
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    if (!order) return;
+    const isMoving =
+      order.status === "driver_on_way_pickup" ||
+      order.status === "driver_on_way_delivery";
+    if (!isMoving) return;
+
+    // Ambil posisi GPS
+    if (!navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setDriverPosition({ lat: latitude, lng: longitude });
+        sendLocation(latitude, longitude);
+      },
+      () => { /* permission denied atau error */ },
+      { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [order?.status, sendLocation, order]);
+
+  const handleUpdateStatus = async () => {
+    if (!order) return;
+    const action = STATUS_ACTIONS[order.status];
+    if (!action) return;
+
+    setUpdating(true);
+    try {
+      await api.patch(`/driver/orders/${orderId}`, { status: action.nextStatus });
+      setOrder((prev) => prev ? { ...prev, status: action.nextStatus } : prev);
+    } catch {
+      setError("Gagal memperbarui status.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-8 w-48 bg-shade-10 rounded" />
+        <div className="h-64 bg-shade-10 rounded-lg" />
+        <div className="h-32 bg-shade-10 rounded-lg" />
+      </div>
+    );
+  }
+
+  if (error || !order) {
+    return (
+      <div className="bg-red-500/10 border border-red-500/30 rounded-md px-4 py-3 text-[14px] text-red-600">
+        {error ?? "Order tidak ditemukan."}
+      </div>
+    );
+  }
+
+  const action = STATUS_ACTIONS[order.status];
+  const isMoving = order.status === "driver_on_way_pickup" || order.status === "driver_on_way_delivery";
+
+  // Tentukan tujuan peta: saat pickup → lokasi buyer, saat delivery → lokasi buyer
+  const mapDestination = { lat: order.latitude, lng: order.longitude };
+  const destinationLabel = order.type === "pickup" ? "Lokasi Pickup" : "Lokasi Delivery";
+
+  // Link Google Maps untuk navigasi eksternal
+  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${order.latitude},${order.longitude}`;
 
   return (
     <div>
-      {/* Back link */}
       <Link
         href="/driver/orders"
         className="inline-flex items-center gap-1 text-[13px] text-shade-50 hover:text-ink mb-4 transition-colors"
@@ -92,31 +176,52 @@ export default function DriverOrderDetailPage() {
         Kembali ke Order
       </Link>
 
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-[24px] font-[500] leading-[1.3] tracking-[0.3px] text-ink">
             Detail Order
           </h1>
-          <p className="text-[13px] text-shade-50 mt-1">{orderDetail.orderNumber}</p>
+          <p className="text-[13px] text-shade-50 mt-1">{order.orderNumber}</p>
         </div>
-        <OrderStatusBadge status={orderDetail.status} />
+        <OrderStatusBadge status={order.status as Parameters<typeof OrderStatusBadge>[0]["status"]} />
       </div>
 
       <div className="flex flex-col gap-4">
-        {/* Buyer Info */}
+        {/* Peta navigasi */}
+        <Card variant="default">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[15px] font-[600] text-ink">
+              Navigasi ke {destinationLabel}
+            </h2>
+            <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline-light" size="sm">Buka Maps</Button>
+            </a>
+          </div>
+          <TrackingMap
+            destination={mapDestination}
+            driverPosition={driverPosition ?? undefined}
+            destinationLabel={destinationLabel}
+            height="280px"
+            showRoute={isMoving && !!driverPosition}
+          />
+          {isMoving && !driverPosition && (
+            <p className="text-[12px] text-shade-50 mt-2 text-center">
+              Mengambil lokasi GPS Anda...
+            </p>
+          )}
+        </Card>
+
+        {/* Info Pembeli */}
         <Card variant="default" className="flex flex-col gap-4">
           <h2 className="text-[15px] font-[600] text-ink">Info Pembeli</h2>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-shade-30 flex items-center justify-center">
-                <span className="text-[14px] font-[600] text-ink">
-                  {orderDetail.buyer.name.charAt(0)}
-                </span>
+                <span className="text-[14px] font-[600] text-ink">{order.buyer.name.charAt(0)}</span>
               </div>
               <div>
-                <p className="text-[14px] font-[500] text-ink">{orderDetail.buyer.name}</p>
-                <p className="text-[12px] text-shade-50">{orderDetail.buyer.phone}</p>
+                <p className="text-[14px] font-[500] text-ink">{order.buyer.name}</p>
+                <p className="text-[12px] text-shade-50">{order.buyer.phone}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -126,7 +231,7 @@ export default function DriverOrderDetailPage() {
                   Chat
                 </Button>
               </Link>
-              <a href={`tel:${orderDetail.buyer.phone}`}>
+              <a href={`tel:${order.buyer.phone}`}>
                 <Button variant="outline-light" size="sm" className="gap-1">
                   <PhoneIcon />
                   Telepon
@@ -136,62 +241,73 @@ export default function DriverOrderDetailPage() {
           </div>
         </Card>
 
-        {/* Address */}
-        <Card variant="default" className="flex flex-col gap-4">
+        {/* Alamat */}
+        <Card variant="default" className="flex flex-col gap-3">
           <h2 className="text-[15px] font-[600] text-ink">
-            Alamat {orderDetail.type === "pickup" ? "Pickup" : "Delivery"}
+            Alamat {order.type === "pickup" ? "Pickup" : "Delivery"}
           </h2>
           <div className="flex items-start gap-3">
             <LocationIcon />
-            <p className="text-[14px] text-ink leading-[1.6]">{orderDetail.address}</p>
+            <p className="text-[14px] text-ink leading-[1.6]">{order.address}</p>
           </div>
-          <a
-            href={mapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Button variant="outline-light" size="sm" className="gap-1">
-              <MapIcon />
-              Buka di Maps
-            </Button>
-          </a>
+          {order.type === "pickup" && (
+            <div className="mt-1 pt-3 border-t border-hairline-light">
+              <p className="text-[12px] text-shade-50 mb-1">Antar ke Laundry:</p>
+              <p className="text-[13px] font-[500] text-ink">{order.laundryName}</p>
+              <p className="text-[12px] text-shade-50">{order.laundryAddress}</p>
+            </div>
+          )}
         </Card>
 
-        {/* Order Info */}
+        {/* Detail Pesanan */}
         <Card variant="default" className="flex flex-col gap-3">
           <h2 className="text-[15px] font-[600] text-ink">Detail Pesanan</h2>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-[12px] text-shade-50">Laundry</p>
-              <p className="text-[14px] font-[500] text-ink">{orderDetail.laundryName}</p>
+              <p className="text-[14px] font-[500] text-ink">{order.laundryName}</p>
             </div>
             <div>
               <p className="text-[12px] text-shade-50">Layanan</p>
-              <p className="text-[14px] font-[500] text-ink">{orderDetail.service}</p>
+              <p className="text-[14px] font-[500] text-ink">{order.service}</p>
             </div>
-            <div>
-              <p className="text-[12px] text-shade-50">Estimasi Berat</p>
-              <p className="text-[14px] font-[500] text-ink">{orderDetail.estimatedWeight} kg</p>
-            </div>
+            {order.estimatedWeight && (
+              <div>
+                <p className="text-[12px] text-shade-50">Estimasi Berat</p>
+                <p className="text-[14px] font-[500] text-ink">{order.estimatedWeight} kg</p>
+              </div>
+            )}
             <div>
               <p className="text-[12px] text-shade-50">Ongkos Kirim</p>
-              <p className="text-[14px] font-[500] text-ink">{formatCurrency(orderDetail.deliveryFee)}</p>
+              <p className="text-[14px] font-[500] text-ink">{formatCurrency(order.deliveryFee)}</p>
             </div>
           </div>
-          {orderDetail.notes && (
+          {order.buyerNotes && (
             <div className="mt-2 p-3 bg-canvas-cream rounded-md">
               <p className="text-[12px] text-shade-50 mb-1">Catatan:</p>
-              <p className="text-[13px] text-ink">{orderDetail.notes}</p>
+              <p className="text-[13px] text-ink">{order.buyerNotes}</p>
             </div>
           )}
         </Card>
 
-        {/* Action Button */}
-        {actionLabel && (
+        {/* Tombol aksi */}
+        {action && (
           <div className="pt-2">
-            <Button variant="primary" size="lg" className="w-full">
-              {actionLabel}
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full"
+              onClick={handleUpdateStatus}
+              loading={updating}
+            >
+              {action.label}
             </Button>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-md px-4 py-3 text-[14px] text-red-600">
+            {error}
           </div>
         )}
       </div>

@@ -1,0 +1,348 @@
+// SiapLaundry database schema — TiDB (MySQL-compatible)
+// Mengacu ke PRODUCT_STRUCTURE.md section 5 (Database Schema)
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = []
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+// ============================================================
+// Users & Auth
+// ============================================================
+
+enum UserRole {
+  buyer
+  seller
+  driver
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  phone        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole
+  name         String
+  profilePhoto String?  @map("profile_photo")
+  isVerified   Boolean  @default(false) @map("is_verified")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  buyer    Buyer?
+  seller   Seller?
+  driver   Driver?
+
+  sentMessages     Chat[]         @relation("ChatSender")
+  receivedMessages Chat[]         @relation("ChatReceiver")
+  notifications    Notification[]
+  refreshTokens    RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  token     String   @unique @db.VarChar(512)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ============================================================
+// Buyers
+// ============================================================
+
+model Buyer {
+  id        Int    @id @default(autoincrement())
+  userId    Int    @unique @map("user_id")
+  fullName  String @map("full_name")
+  addresses Json?
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+  reviews Review[]
+
+  @@map("buyers")
+}
+
+// ============================================================
+// Sellers (Laundries)
+// ============================================================
+
+model Seller {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique @map("user_id")
+  laundryName     String   @map("laundry_name")
+  ownerName       String   @map("owner_name")
+  businessEmail   String?  @map("business_email")
+  address         String   @db.Text
+  latitude        Decimal  @db.Decimal(10, 8)
+  longitude       Decimal  @db.Decimal(11, 8)
+  photos          Json?
+  operatingHours  Json?    @map("operating_hours")
+  isOpen          Boolean  @default(true) @map("is_open")
+  averageRating   Decimal  @default(0) @map("average_rating") @db.Decimal(2, 1)
+  totalReviews    Int      @default(0) @map("total_reviews")
+  totalOrders     Int      @default(0) @map("total_orders")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  services Service[]
+  orders   Order[]
+  reviews  Review[]
+
+  @@map("sellers")
+}
+
+// ============================================================
+// Drivers
+// ============================================================
+
+enum VehicleType {
+  motorcycle
+  car
+}
+
+model Driver {
+  id               Int         @id @default(autoincrement())
+  userId           Int         @unique @map("user_id")
+  fullName         String      @map("full_name")
+  ktpNumber        String      @map("ktp_number")
+  ktpPhoto         String      @map("ktp_photo")
+  simNumber        String      @map("sim_number")
+  simPhoto         String      @map("sim_photo")
+  vehicleType      VehicleType @map("vehicle_type")
+  vehiclePlate     String      @map("vehicle_plate")
+  isOnline         Boolean     @default(false) @map("is_online")
+  currentLatitude  Decimal?    @map("current_latitude") @db.Decimal(10, 8)
+  currentLongitude Decimal?    @map("current_longitude") @db.Decimal(11, 8)
+  averageRating    Decimal     @default(0) @map("average_rating") @db.Decimal(2, 1)
+  totalDeliveries  Int         @default(0) @map("total_deliveries")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pickupOrders    Order[]  @relation("PickupDriver")
+  deliveryOrders  Order[]  @relation("DeliveryDriver")
+  reviews         Review[]
+
+  @@map("drivers")
+}
+
+// ============================================================
+// Services
+// ============================================================
+
+enum ServiceUnit {
+  kg
+  pcs
+}
+
+model Service {
+  id                     Int         @id @default(autoincrement())
+  sellerId               Int         @map("seller_id")
+  serviceName            String      @map("service_name")
+  pricePerUnit           Decimal     @map("price_per_unit") @db.Decimal(10, 2)
+  unit                   ServiceUnit @default(kg)
+  estimatedDurationDays  Int         @map("estimated_duration_days")
+  description            String?     @db.Text
+  isActive               Boolean     @default(true) @map("is_active")
+  createdAt              DateTime    @default(now()) @map("created_at")
+
+  seller Seller  @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([sellerId])
+  @@map("services")
+}
+
+// ============================================================
+// Orders
+// ============================================================
+
+enum OrderStatus {
+  pending_pickup
+  driver_on_way_pickup
+  picked_up
+  at_laundry
+  washing
+  ready_for_delivery
+  driver_on_way_delivery
+  delivered
+  completed
+  cancelled
+}
+
+enum PickupTimeSlot {
+  morning
+  afternoon
+  evening
+}
+
+enum PaymentStatus {
+  pending
+  paid
+}
+
+model Order {
+  id          Int    @id @default(autoincrement())
+  orderNumber String @unique @map("order_number")
+
+  buyerId   Int @map("buyer_id")
+  sellerId  Int @map("seller_id")
+  serviceId Int @map("service_id")
+
+  pickupAddress    String         @map("pickup_address") @db.Text
+  pickupLatitude   Decimal        @map("pickup_latitude") @db.Decimal(10, 8)
+  pickupLongitude  Decimal        @map("pickup_longitude") @db.Decimal(11, 8)
+  pickupDate       DateTime       @map("pickup_date") @db.Date
+  pickupTimeSlot   PickupTimeSlot @map("pickup_time_slot")
+  pickupDriverId   Int?           @map("pickup_driver_id")
+
+  deliveryDriverId Int?    @map("delivery_driver_id")
+  deliveryAddress  String? @map("delivery_address") @db.Text
+
+  estimatedWeight Decimal? @map("estimated_weight") @db.Decimal(5, 2)
+  actualWeight    Decimal? @map("actual_weight") @db.Decimal(5, 2)
+  estimatedPrice  Decimal? @map("estimated_price") @db.Decimal(10, 2)
+  finalPrice      Decimal? @map("final_price") @db.Decimal(10, 2)
+  deliveryFee     Decimal  @default(5000) @map("delivery_fee") @db.Decimal(10, 2)
+  totalPrice      Decimal? @map("total_price") @db.Decimal(10, 2)
+
+  status OrderStatus @default(pending_pickup)
+
+  buyerNotes String? @map("buyer_notes") @db.Text
+
+  paymentStatus PaymentStatus @default(pending) @map("payment_status")
+  paymentMethod String?       @map("payment_method")
+
+  createdAt             DateTime  @default(now()) @map("created_at")
+  pickedUpAt            DateTime? @map("picked_up_at")
+  arrivedAtLaundryAt    DateTime? @map("arrived_at_laundry_at")
+  washingStartedAt      DateTime? @map("washing_started_at")
+  washingCompletedAt    DateTime? @map("washing_completed_at")
+  deliveryStartedAt     DateTime? @map("delivery_started_at")
+  deliveredAt           DateTime? @map("delivered_at")
+  completedAt           DateTime? @map("completed_at")
+
+  buyer          Buyer               @relation(fields: [buyerId], references: [id])
+  seller         Seller              @relation(fields: [sellerId], references: [id])
+  service        Service             @relation(fields: [serviceId], references: [id])
+  pickupDriver   Driver?             @relation("PickupDriver", fields: [pickupDriverId], references: [id])
+  deliveryDriver Driver?             @relation("DeliveryDriver", fields: [deliveryDriverId], references: [id])
+  statusHistory  OrderStatusHistory[]
+  review         Review?
+  chats          Chat[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([serviceId])
+  @@index([pickupDriverId])
+  @@index([deliveryDriverId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderStatusHistory {
+  id        Int      @id @default(autoincrement())
+  orderId   Int      @map("order_id")
+  status    String
+  notes     String?  @db.Text
+  createdBy Int?     @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+// ============================================================
+// Reviews
+// ============================================================
+
+model Review {
+  id       Int @id @default(autoincrement())
+  orderId  Int @unique @map("order_id")
+  buyerId  Int @map("buyer_id")
+  sellerId Int @map("seller_id")
+
+  laundryRating Int?    @map("laundry_rating")
+  laundryReview String? @map("laundry_review") @db.Text
+
+  driverId     Int? @map("driver_id")
+  driverRating Int? @map("driver_rating")
+
+  photos Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  order  Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  buyer  Buyer   @relation(fields: [buyerId], references: [id])
+  seller Seller  @relation(fields: [sellerId], references: [id])
+  driver Driver? @relation(fields: [driverId], references: [id])
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([driverId])
+  @@map("reviews")
+}
+
+// ============================================================
+// Chats
+// ============================================================
+
+model Chat {
+  id         Int      @id @default(autoincrement())
+  orderId    Int      @map("order_id")
+  senderId   Int      @map("sender_id")
+  receiverId Int      @map("receiver_id")
+  message    String   @db.Text
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sender   User  @relation("ChatSender", fields: [senderId], references: [id])
+  receiver User  @relation("ChatReceiver", fields: [receiverId], references: [id])
+
+  @@index([orderId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@map("chats")
+}
+
+// ============================================================
+// Notifications
+// ============================================================
+
+enum NotificationType {
+  order
+  chat
+  review
+  system
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int              @map("user_id")
+  title     String
+  message   String           @db.Text
+  type      NotificationType
+  relatedId Int?             @map("related_id")
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
