@@ -14,10 +14,13 @@ const TAB_ITEMS = [
 ];
 
 const ONGOING_STATUSES = new Set([
+  "pending_confirmation",
+  "confirmed",
   "pending_pickup",
   "driver_on_way_pickup",
   "picked_up",
   "at_laundry",
+  "payment_pending",
   "washing",
   "ready_for_delivery",
   "driver_on_way_delivery",

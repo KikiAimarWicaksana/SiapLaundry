@@ -48,6 +48,8 @@ export async function GET(request: NextRequest) {
       laundryName: o.seller.laundryName,
       service: o.service.serviceName,
       status: o.status,
+      pickupDate: o.pickupDate.toISOString().split('T')[0],
+      pickupTimeSlot: o.pickupTimeSlot,
     })
 
     if (type === 'pickup') {

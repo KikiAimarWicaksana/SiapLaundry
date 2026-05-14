@@ -30,10 +30,13 @@ function getRecentTimelineEvents(order: Order, count: number): TimelineEvent[] {
 
 function getStatusLabel(status: OrderStatus): string {
   const labels: Record<OrderStatus, string> = {
+    pending_confirmation: "Menunggu Konfirmasi Laundry",
+    confirmed: "Pesanan Dikonfirmasi",
     pending_pickup: "Menunggu Penjemputan",
     driver_on_way_pickup: "Kurir Menuju Lokasi",
     picked_up: "Pakaian Dijemput",
     at_laundry: "Di Laundry",
+    payment_pending: "Menunggu Pembayaran",
     washing: "Sedang Dicuci",
     ready_for_delivery: "Siap Diantar",
     driver_on_way_delivery: "Kurir Mengantar",
@@ -41,7 +44,7 @@ function getStatusLabel(status: OrderStatus): string {
     completed: "Selesai",
     cancelled: "Dibatalkan",
   };
-  return labels[status];
+  return labels[status] ?? status;
 }
 
 function formatTimestamp(dateStr: string): string {

@@ -3,7 +3,6 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useNotificationStore } from "@/stores/notificationStore";
 import { useAuthStore } from "@/stores/authStore";
 
 interface NavItem {
@@ -144,8 +143,27 @@ function LogoutIcon({ className }: { className?: string }) {
 
 export function SellerSidebar() {
   const pathname = usePathname();
-  const unreadCount = useNotificationStore((state) => state.unreadCount);
   const logout = useAuthStore((state) => state.logout);
+  const [pendingOrderCount, setPendingOrderCount] = React.useState(0);
+
+  // Fetch jumlah order pending_confirmation secara terpisah dari notifikasi
+  React.useEffect(() => {
+    async function fetchPending() {
+      try {
+        const { default: api } = await import('@/lib/api');
+        const res = await api.get('/seller/orders');
+        const orders = res.data.data ?? [];
+        const count = orders.filter((o: { status: string }) => o.status === 'pending_confirmation').length;
+        setPendingOrderCount(count);
+      } catch {
+        // silent
+      }
+    }
+    fetchPending();
+    // Poll setiap 30 detik
+    const interval = setInterval(fetchPending, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const navItems: NavItem[] = [
     {
@@ -221,12 +239,12 @@ export function SellerSidebar() {
                 >
                   <span className="flex-shrink-0">{item.icon}</span>
                   <span className="flex-1">{item.label}</span>
-                  {item.showBadge && unreadCount > 0 && (
+                  {item.showBadge && pendingOrderCount > 0 && (
                     <span
                       className="min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-red-500 text-canvas-light text-[11px] font-[500] leading-none px-1"
-                      aria-label={`${unreadCount} order baru`}
+                      aria-label={`${pendingOrderCount} order menunggu konfirmasi`}
                     >
-                      {unreadCount > 99 ? "99+" : unreadCount}
+                      {pendingOrderCount > 99 ? "99+" : pendingOrderCount}
                     </span>
                   )}
                 </Link>

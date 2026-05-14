@@ -42,8 +42,10 @@ export async function GET(
 
     if (!order) return notFound('Order tidak ditemukan')
 
-    const isPickup = order.pickupDriverId === driver.id
-    const type = isPickup ? 'pickup' : 'delivery'
+    // Tentukan type berdasarkan status order, bukan driver ID
+    // Status delivery: ready_for_delivery, driver_on_way_delivery, delivered
+    const deliveryStatuses = ['ready_for_delivery', 'driver_on_way_delivery', 'delivered']
+    const type = deliveryStatuses.includes(order.status) ? 'delivery' : 'pickup'
 
     return NextResponse.json({
       success: true,
@@ -56,10 +58,11 @@ export async function GET(
           name: order.buyer.user.name,
           phone: order.buyer.user.phone,
         },
-        // Untuk pickup: tuju alamat buyer. Untuk delivery: tuju alamat buyer juga (antar balik)
-        address: type === 'pickup' ? order.pickupAddress : (order.deliveryAddress ?? order.pickupAddress),
-        latitude: type === 'pickup' ? Number(order.pickupLatitude) : Number(order.pickupLatitude),
-        longitude: type === 'pickup' ? Number(order.pickupLongitude) : Number(order.pickupLongitude),
+        // Untuk delivery: address = alamat customer (tujuan akhir)
+        // Untuk pickup: address = alamat customer (titik jemput)
+        address: order.deliveryAddress ?? order.pickupAddress,
+        latitude: Number(order.pickupLatitude),
+        longitude: Number(order.pickupLongitude),
         laundryName: order.seller.laundryName,
         laundryAddress: order.seller.address,
         laundryLatitude: Number(order.seller.latitude),
@@ -69,6 +72,8 @@ export async function GET(
         deliveryFee: Number(order.deliveryFee),
         buyerNotes: order.buyerNotes ?? null,
         createdAt: order.createdAt.toISOString(),
+        pickupDate: order.pickupDate.toISOString().split('T')[0],
+        pickupTimeSlot: order.pickupTimeSlot,
       },
     })
   } catch (err) {

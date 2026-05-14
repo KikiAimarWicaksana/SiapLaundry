@@ -28,6 +28,8 @@ interface DriverOrderDetail {
   deliveryFee: number;
   buyerNotes: string | null;
   createdAt: string;
+  pickupDate?: string;
+  pickupTimeSlot?: string;
 }
 
 const STATUS_ACTIONS: Record<string, { label: string; nextStatus: string }> = {
@@ -158,12 +160,21 @@ export default function DriverOrderDetailPage() {
   const action = STATUS_ACTIONS[order.status];
   const isMoving = order.status === "driver_on_way_pickup" || order.status === "driver_on_way_delivery";
 
-  // Tentukan tujuan peta: saat pickup → lokasi buyer, saat delivery → lokasi buyer
-  const mapDestination = { lat: order.latitude, lng: order.longitude };
-  const destinationLabel = order.type === "pickup" ? "Lokasi Pickup" : "Lokasi Delivery";
+  // Delivery: tujuan pertama = laundry (ambil cucian), tujuan kedua = customer (antar)
+  // Pickup: tujuan = lokasi customer
+  const isDelivery = order.type === "delivery";
 
-  // Link Google Maps untuk navigasi eksternal
-  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${order.latitude},${order.longitude}`;
+  // Saat delivery dan belum mulai jalan → tuju laundry dulu
+  // Saat delivery dan sudah on the way → tuju customer
+  const goToLaundryFirst = isDelivery && order.status === "ready_for_delivery";
+  const mapDestination = goToLaundryFirst
+    ? { lat: order.laundryLatitude, lng: order.laundryLongitude }
+    : { lat: order.latitude, lng: order.longitude };
+  const destinationLabel = goToLaundryFirst
+    ? `Laundry: ${order.laundryName}`
+    : isDelivery ? "Lokasi Customer" : "Lokasi Pickup";
+
+  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapDestination.lat},${mapDestination.lng}`;
 
   return (
     <div>
@@ -244,25 +255,103 @@ export default function DriverOrderDetailPage() {
 
         {/* Alamat */}
         <Card variant="default" className="flex flex-col gap-3">
-          <h2 className="text-[15px] font-[600] text-ink">
-            Alamat {order.type === "pickup" ? "Pickup" : "Delivery"}
-          </h2>
-          <div className="flex items-start gap-3">
-            <LocationIcon />
-            <p className="text-[14px] text-ink leading-[1.6]">{order.address}</p>
-          </div>
-          {order.type === "pickup" && (
-            <div className="mt-1 pt-3 border-t border-hairline-light">
-              <p className="text-[12px] text-shade-50 mb-1">Antar ke Laundry:</p>
-              <p className="text-[13px] font-[500] text-ink">{order.laundryName}</p>
-              <p className="text-[12px] text-shade-50">{order.laundryAddress}</p>
-            </div>
+          {isDelivery ? (
+            <>
+              {/* Delivery: tampilkan laundry dulu, lalu customer */}
+              <h2 className="text-[15px] font-[600] text-ink">Rute Pengantaran</h2>
+
+              {/* Step 1: Ambil dari laundry */}
+              <div className={[
+                "flex items-start gap-3 p-3 rounded-md border",
+                goToLaundryFirst ? "bg-yellow-50 border-yellow-200" : "bg-canvas-cream border-hairline-light opacity-60",
+              ].join(" ")}>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <div className={["w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-[700]",
+                    goToLaundryFirst ? "bg-yellow-500 text-white" : "bg-green-500 text-white"].join(" ")}>
+                    {goToLaundryFirst ? "1" : "✓"}
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[12px] font-[600] text-shade-50 uppercase tracking-wider mb-1">
+                    Ambil dari Laundry
+                  </p>
+                  <p className="text-[14px] font-[500] text-ink">{order.laundryName}</p>
+                  <p className="text-[12px] text-shade-50 mt-0.5">{order.laundryAddress}</p>
+                </div>
+              </div>
+
+              {/* Garis penghubung */}
+              <div className="flex items-center gap-3 px-3">
+                <div className="w-6 flex justify-center">
+                  <div className="w-0.5 h-4 bg-shade-30" />
+                </div>
+                <p className="text-[11px] text-shade-40">lalu antar ke</p>
+              </div>
+
+              {/* Step 2: Antar ke customer */}
+              <div className={[
+                "flex items-start gap-3 p-3 rounded-md border",
+                !goToLaundryFirst ? "bg-blue-50 border-blue-200" : "bg-canvas-cream border-hairline-light opacity-60",
+              ].join(" ")}>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <div className={["w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-[700]",
+                    !goToLaundryFirst ? "bg-blue-500 text-white" : "bg-shade-30 text-shade-50"].join(" ")}>
+                    2
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[12px] font-[600] text-shade-50 uppercase tracking-wider mb-1">
+                    Antar ke Customer
+                  </p>
+                  <p className="text-[14px] font-[500] text-ink">{order.buyer.name}</p>
+                  <p className="text-[12px] text-shade-50 mt-0.5">{order.address}</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Pickup: tampilkan alamat customer */}
+              <h2 className="text-[15px] font-[600] text-ink">Alamat Pickup</h2>
+              <div className="flex items-start gap-3">
+                <LocationIcon />
+                <p className="text-[14px] text-ink leading-[1.6]">{order.address}</p>
+              </div>
+              <div className="mt-1 pt-3 border-t border-hairline-light">
+                <p className="text-[12px] text-shade-50 mb-1">Antar ke Laundry:</p>
+                <p className="text-[13px] font-[500] text-ink">{order.laundryName}</p>
+                <p className="text-[12px] text-shade-50">{order.laundryAddress}</p>
+              </div>
+            </>
           )}
         </Card>
 
         {/* Detail Pesanan */}
         <Card variant="default" className="flex flex-col gap-3">
           <h2 className="text-[15px] font-[600] text-ink">Detail Pesanan</h2>
+
+          {/* Jadwal Pickup */}
+          {order.type === "pickup" && (
+            <div className="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <svg className="h-5 w-5 text-yellow-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <div>
+                <p className="text-[13px] font-[600] text-yellow-800">Jadwal Pickup</p>
+                <p className="text-[13px] text-yellow-700 mt-0.5">
+                  {new Date(order.pickupDate ?? "").toLocaleDateString("id-ID", {
+                    weekday: "long", day: "numeric", month: "long", year: "numeric"
+                  })}
+                </p>
+                <p className="text-[12px] text-yellow-600 mt-0.5">
+                  {order.pickupTimeSlot === "morning" ? "⏰ Pagi (08:00 - 12:00)"
+                    : order.pickupTimeSlot === "afternoon" ? "⏰ Siang (12:00 - 15:00)"
+                    : order.pickupTimeSlot === "evening" ? "⏰ Sore (15:00 - 18:00)"
+                    : order.pickupTimeSlot}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-[12px] text-shade-50">Laundry</p>

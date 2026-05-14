@@ -1,53 +1,82 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { StarRating } from "@/components/ui/StarRating";
+import { useToast } from "@/components/ui/Toast";
+import api from "@/lib/api";
 
-// Mock data
-const driverProfile = {
-  name: "Ahmad Kurniawan",
-  phone: "081298765432",
-  email: "ahmad.kurniawan@email.com",
-  vehicle: "Motor",
-  vehiclePlate: "D 1234 ABC",
-  rating: 4.8,
-  totalTrips: 342,
-  joinedDate: "Januari 2025",
-  profilePhoto: null,
-};
+interface DriverProfile {
+  name: string;
+  email: string;
+  phone: string;
+  vehicleType: string;
+  vehiclePlate: string;
+  averageRating: number;
+  totalDeliveries: number;
+  isOnline: boolean;
+  joinedDate: string;
+}
 
 export default function DriverProfilePage() {
+  const { addToast } = useToast();
+  const [profile, setProfile] = useState<DriverProfile | null>(null);
+  const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    name: driverProfile.name,
-    phone: driverProfile.phone,
-    email: driverProfile.email,
-    vehicle: driverProfile.vehicle,
-    vehiclePlate: driverProfile.vehiclePlate,
-  });
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({ phone: "", vehiclePlate: "" });
 
-  const handleChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const res = await api.get("/driver/profile");
+        const data: DriverProfile = res.data.data;
+        setProfile(data);
+        setFormData({ phone: data.phone, vehiclePlate: data.vehiclePlate });
+      } catch {
+        addToast("Gagal memuat profil.", "error");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProfile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleSave = () => {
-    // In real app, this would call an API
-    setIsEditing(false);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.patch("/driver/profile", formData);
+      setProfile((prev) => prev ? { ...prev, ...formData } : prev);
+      setIsEditing(false);
+      addToast("Profil berhasil disimpan!", "success");
+    } catch {
+      addToast("Gagal menyimpan profil.", "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {
-    setFormData({
-      name: driverProfile.name,
-      phone: driverProfile.phone,
-      email: driverProfile.email,
-      vehicle: driverProfile.vehicle,
-      vehiclePlate: driverProfile.vehiclePlate,
-    });
+    if (profile) setFormData({ phone: profile.phone, vehiclePlate: profile.vehiclePlate });
     setIsEditing(false);
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-8 w-40 bg-shade-10 rounded" />
+        <div className="h-48 bg-shade-10 rounded-lg" />
+        <div className="h-64 bg-shade-10 rounded-lg" />
+      </div>
+    );
+  }
+
+  if (!profile) return null;
+
+  const vehicleLabel = profile.vehicleType === "motorcycle" ? "Motor" : "Mobil";
 
   return (
     <div>
@@ -57,35 +86,33 @@ export default function DriverProfilePage() {
 
       {/* Profile Header */}
       <Card variant="default" className="flex flex-col items-center gap-4 mb-6">
-        {/* Avatar */}
         <div className="w-20 h-20 rounded-full bg-shade-30 flex items-center justify-center">
-          <span className="text-[28px] font-[600] text-ink">
-            {driverProfile.name.charAt(0)}
-          </span>
+          <span className="text-[28px] font-[600] text-ink">{profile.name.charAt(0)}</span>
         </div>
         <div className="text-center">
-          <h2 className="text-[18px] font-[600] text-ink">{driverProfile.name}</h2>
-          <p className="text-[13px] text-shade-50 mt-1">Bergabung sejak {driverProfile.joinedDate}</p>
+          <h2 className="text-[18px] font-[600] text-ink">{profile.name}</h2>
+          <p className="text-[13px] text-shade-50 mt-1">Bergabung sejak {profile.joinedDate}</p>
         </div>
 
-        {/* Rating & Stats */}
         <div className="flex items-center gap-6 pt-2">
           <div className="flex flex-col items-center">
             <div className="flex items-center gap-1">
-              <StarRating value={Math.round(driverProfile.rating)} readonly size="sm" />
-              <span className="text-[14px] font-[600] text-ink ml-1">{driverProfile.rating}</span>
+              <StarRating value={Math.round(profile.averageRating)} readonly size="sm" />
+              <span className="text-[14px] font-[600] text-ink ml-1">
+                {profile.averageRating > 0 ? profile.averageRating.toFixed(1) : "—"}
+              </span>
             </div>
             <p className="text-[12px] text-shade-50 mt-1">Rating</p>
           </div>
           <div className="w-px h-8 bg-hairline-light" aria-hidden="true" />
           <div className="flex flex-col items-center">
-            <p className="text-[18px] font-[600] text-ink">{driverProfile.totalTrips}</p>
+            <p className="text-[18px] font-[600] text-ink">{profile.totalDeliveries}</p>
             <p className="text-[12px] text-shade-50 mt-1">Total Trip</p>
           </div>
         </div>
       </Card>
 
-      {/* Profile Details / Edit Form */}
+      {/* Profile Details */}
       <Card variant="default" className="flex flex-col gap-5">
         <div className="flex items-center justify-between">
           <h2 className="text-[16px] font-[600] text-ink">Informasi Profil</h2>
@@ -97,75 +124,52 @@ export default function DriverProfilePage() {
         </div>
 
         {isEditing ? (
-          /* Edit Form */
           <div className="flex flex-col gap-4">
-            <Input
-              label="Nama Lengkap"
-              value={formData.name}
-              onChange={(e) => handleChange("name", e.target.value)}
-            />
             <Input
               label="No. Telepon"
               value={formData.phone}
-              onChange={(e) => handleChange("phone", e.target.value)}
+              onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))}
               type="tel"
-            />
-            <Input
-              label="Email"
-              value={formData.email}
-              onChange={(e) => handleChange("email", e.target.value)}
-              type="email"
-            />
-            <Input
-              label="Kendaraan"
-              value={formData.vehicle}
-              onChange={(e) => handleChange("vehicle", e.target.value)}
             />
             <Input
               label="Plat Nomor"
               value={formData.vehiclePlate}
-              onChange={(e) => handleChange("vehiclePlate", e.target.value)}
+              onChange={(e) => setFormData((f) => ({ ...f, vehiclePlate: e.target.value }))}
             />
-
             <div className="flex items-center gap-3 pt-2">
-              <Button variant="primary" size="md" onClick={handleSave}>
-                Simpan
-              </Button>
-              <Button variant="outline-light" size="md" onClick={handleCancel}>
-                Batal
-              </Button>
+              <Button variant="primary" size="md" onClick={handleSave} loading={saving}>Simpan</Button>
+              <Button variant="outline-light" size="md" onClick={handleCancel}>Batal</Button>
             </div>
           </div>
         ) : (
-          /* Display Mode */
-          <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-[12px] text-shade-50 mb-1">Nama Lengkap</p>
-                <p className="text-[14px] font-[500] text-ink">{driverProfile.name}</p>
-              </div>
-              <div>
-                <p className="text-[12px] text-shade-50 mb-1">No. Telepon</p>
-                <p className="text-[14px] font-[500] text-ink">{driverProfile.phone}</p>
-              </div>
-              <div>
-                <p className="text-[12px] text-shade-50 mb-1">Email</p>
-                <p className="text-[14px] font-[500] text-ink">{driverProfile.email}</p>
-              </div>
-              <div>
-                <p className="text-[12px] text-shade-50 mb-1">Kendaraan</p>
-                <p className="text-[14px] font-[500] text-ink">{driverProfile.vehicle}</p>
-              </div>
-              <div>
-                <p className="text-[12px] text-shade-50 mb-1">Plat Nomor</p>
-                <p className="text-[14px] font-[500] text-ink">{driverProfile.vehiclePlate}</p>
-              </div>
-              <div>
-                <p className="text-[12px] text-shade-50 mb-1">Rating</p>
-                <div className="flex items-center gap-1">
-                  <StarRating value={Math.round(driverProfile.rating)} readonly size="sm" />
-                  <span className="text-[14px] font-[500] text-ink">{driverProfile.rating}</span>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-[12px] text-shade-50 mb-1">Nama Lengkap</p>
+              <p className="text-[14px] font-[500] text-ink">{profile.name}</p>
+            </div>
+            <div>
+              <p className="text-[12px] text-shade-50 mb-1">No. Telepon</p>
+              <p className="text-[14px] font-[500] text-ink">{profile.phone}</p>
+            </div>
+            <div>
+              <p className="text-[12px] text-shade-50 mb-1">Email</p>
+              <p className="text-[14px] font-[500] text-ink">{profile.email}</p>
+            </div>
+            <div>
+              <p className="text-[12px] text-shade-50 mb-1">Kendaraan</p>
+              <p className="text-[14px] font-[500] text-ink">{vehicleLabel}</p>
+            </div>
+            <div>
+              <p className="text-[12px] text-shade-50 mb-1">Plat Nomor</p>
+              <p className="text-[14px] font-[500] text-ink">{profile.vehiclePlate}</p>
+            </div>
+            <div>
+              <p className="text-[12px] text-shade-50 mb-1">Rating</p>
+              <div className="flex items-center gap-1">
+                <StarRating value={Math.round(profile.averageRating)} readonly size="sm" />
+                <span className="text-[14px] font-[500] text-ink">
+                  {profile.averageRating > 0 ? profile.averageRating.toFixed(1) : "Belum ada"}
+                </span>
               </div>
             </div>
           </div>

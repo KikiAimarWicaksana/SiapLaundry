@@ -16,6 +16,8 @@ interface DriverOrder {
   laundryName: string;
   service: string;
   status: string;
+  pickupDate?: string;
+  pickupTimeSlot?: string;
 }
 
 function LocationIcon() {
@@ -109,6 +111,29 @@ export default function DriverOrdersPage() {
                   </div>
                   <OrderStatusBadge status={order.status as Parameters<typeof OrderStatusBadge>[0]["status"]} />
                 </div>
+
+                {/* Jadwal pickup — tampil di tab pickup */}
+                {activeTab === "pickup" && (order.pickupDate || order.pickupTimeSlot) && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <svg className="h-4 w-4 text-yellow-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <div>
+                      <p className="text-[12px] font-[600] text-yellow-800">
+                        {order.pickupDate ? new Date(order.pickupDate).toLocaleDateString("id-ID", {
+                          weekday: "long", day: "numeric", month: "long"
+                        }) : ""}
+                      </p>
+                      <p className="text-[11px] text-yellow-700">
+                        {order.pickupTimeSlot === "morning" ? "Pagi (08:00 - 12:00)"
+                          : order.pickupTimeSlot === "afternoon" ? "Siang (12:00 - 15:00)"
+                          : order.pickupTimeSlot === "evening" ? "Sore (15:00 - 18:00)"
+                          : order.pickupTimeSlot}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-start gap-2">
                   <LocationIcon />
                   <p className="text-[13px] text-ink leading-[1.5]">{order.address}</p>

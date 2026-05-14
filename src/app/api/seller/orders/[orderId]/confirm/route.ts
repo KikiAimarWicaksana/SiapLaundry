@@ -99,26 +99,43 @@ export async function POST(
     // Notifikasi ke buyer
     const buyer = await prisma.buyer.findUnique({ where: { id: order.buyerId } })
     if (buyer) {
+      const pickupDate = order.pickupDate.toLocaleDateString('id-ID', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      })
+      const timeSlotLabel: Record<string, string> = {
+        morning: 'Pagi (08:00 - 12:00)',
+        afternoon: 'Siang (12:00 - 15:00)',
+        evening: 'Sore (15:00 - 18:00)',
+      }
       await prisma.notification.create({
         data: {
           userId: buyer.userId,
-          title: 'Pesanan Diterima',
-          message: `Pesanan #${order.orderNumber} diterima! Kurir akan segera menjemput pakaian Anda.`,
+          title: 'Pesanan Diterima ✓',
+          message: `Pesanan #${order.orderNumber} diterima oleh ${seller.laundryName}! Kurir akan menjemput pada ${pickupDate}, ${timeSlotLabel[order.pickupTimeSlot] ?? order.pickupTimeSlot}.`,
           type: 'order',
           relatedId: order.id,
         },
       })
     }
 
-    // Notifikasi ke driver jika ada
+    // Notifikasi ke driver dengan detail jadwal lengkap
     if (nearestDriverId) {
       const driver = await prisma.driver.findUnique({ where: { id: nearestDriverId } })
       if (driver) {
+        const pickupDate = order.pickupDate.toLocaleDateString('id-ID', {
+          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        })
+        const timeSlotLabel: Record<string, string> = {
+          morning: 'Pagi (08:00 - 12:00)',
+          afternoon: 'Siang (12:00 - 15:00)',
+          evening: 'Sore (15:00 - 18:00)',
+        }
+        const distText = minDist > 0 ? ` • Jarak: ${minDist.toFixed(1)} km` : ''
         await prisma.notification.create({
           data: {
             userId: driver.userId,
-            title: 'Order Pickup Baru',
-            message: `Ada order pickup baru #${order.orderNumber}. Jarak: ${minDist.toFixed(1)} km.`,
+            title: '📦 Jadwal Pickup Baru',
+            message: `Order #${order.orderNumber}\n📅 ${pickupDate}\n⏰ ${timeSlotLabel[order.pickupTimeSlot] ?? order.pickupTimeSlot}\n📍 ${order.pickupAddress}${distText}\n🏪 Antar ke: ${seller.laundryName}`,
             type: 'order',
             relatedId: order.id,
           },
