@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const pickupOrders = await prisma.order.findMany({
       where: {
         pickupDriverId: driver.id,
-        status: { in: ['pending_pickup', 'driver_on_way_pickup', 'picked_up'] },
+        status: { in: ['confirmed', 'pending_pickup', 'driver_on_way_pickup', 'picked_up'] },
       },
       orderBy: { createdAt: 'desc' },
       include: {

@@ -132,15 +132,29 @@ export async function POST(request: NextRequest) {
         estimatedPrice,
         deliveryFee: 5000,
         buyerNotes: buyerNotes ?? null,
-        status: 'pending_pickup',
+        status: 'pending_confirmation',
         statusHistory: {
           create: {
-            status: 'pending_pickup',
+            status: 'pending_confirmation',
             createdBy: authUser.userId,
           },
         },
       },
     })
+
+    // Notifikasi ke seller
+    const seller = await prisma.seller.findUnique({ where: { id: Number(sellerId) } })
+    if (seller) {
+      await prisma.notification.create({
+        data: {
+          userId: seller.userId,
+          title: 'Pesanan Baru Masuk',
+          message: `Ada pesanan baru #${order.orderNumber} menunggu konfirmasi Anda.`,
+          type: 'order',
+          relatedId: order.id,
+        },
+      })
+    }
 
     // Update total orders seller
     await prisma.seller.update({

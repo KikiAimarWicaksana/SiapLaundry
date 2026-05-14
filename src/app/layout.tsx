@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ToastProvider } from "@/components/ui/Toast";
 import { AuthHydrator } from "@/components/layout/AuthHydrator";
+import { IdleLogout } from "@/components/layout/IdleLogout";
 import "./globals.css";
 
 const inter = Inter({
@@ -25,7 +26,10 @@ export default function RootLayout({
     <html lang="id" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-body">
         <ToastProvider>
-          <AuthHydrator>{children}</AuthHydrator>
+          <AuthHydrator>
+            <IdleLogout />
+            {children}
+          </AuthHydrator>
         </ToastProvider>
       </body>
     </html>

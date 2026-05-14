@@ -29,8 +29,10 @@ export function LocationPicker({ initialLocation, onConfirm, onCancel }: Locatio
     initialLocation ?? null
   );
   const [address, setAddress] = useState("");
+  const [manualAddress, setManualAddress] = useState("");
   const [geocoding, setGeocoding] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [forwardGeocoding, setForwardGeocoding] = useState(false);
 
   const defaultCenter = initialLocation ?? { lat: -6.9175, lng: 107.6191 };
 
@@ -40,12 +42,39 @@ export function LocationPicker({ initialLocation, onConfirm, onCancel }: Locatio
       const geocoder = new google.maps.Geocoder();
       const result = await geocoder.geocode({ location: { lat, lng } });
       if (result.results[0]) {
-        setAddress(result.results[0].formatted_address);
+        const found = result.results[0].formatted_address;
+        setAddress(found);
+        setManualAddress(found);
       }
     } catch {
-      setAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      const fallback = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      setAddress(fallback);
+      setManualAddress(fallback);
     } finally {
       setGeocoding(false);
+    }
+  }, []);
+
+  /** Geocode alamat teks → koordinat (forward geocoding) */
+  const forwardGeocode = useCallback(async (text: string) => {
+    if (!text.trim()) return;
+    setForwardGeocoding(true);
+    try {
+      const geocoder = new google.maps.Geocoder();
+      const result = await geocoder.geocode({ address: text });
+      if (result.results[0]) {
+        const loc = result.results[0].geometry.location;
+        const lat = loc.lat();
+        const lng = loc.lng();
+        setMarkerPos({ lat, lng });
+        setAddress(result.results[0].formatted_address);
+        mapRef.current?.panTo({ lat, lng });
+        mapRef.current?.setZoom(16);
+      }
+    } catch {
+      // tidak ditemukan
+    } finally {
+      setForwardGeocoding(false);
     }
   }, []);
 
@@ -78,8 +107,13 @@ export function LocationPicker({ initialLocation, onConfirm, onCancel }: Locatio
   };
 
   const handleConfirm = () => {
-    if (!markerPos) return;
-    onConfirm({ lat: markerPos.lat, lng: markerPos.lng, address });
+    if (!markerPos && !manualAddress.trim()) return;
+    // Jika hanya isi manual tanpa pilih peta, gunakan koordinat 0,0
+    onConfirm({
+      lat: markerPos?.lat ?? 0,
+      lng: markerPos?.lng ?? 0,
+      address: manualAddress.trim() || address,
+    });
   };
 
   if (loadError) {
@@ -100,6 +134,40 @@ export function LocationPicker({ initialLocation, onConfirm, onCancel }: Locatio
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Input manual alamat */}
+      <div className="flex flex-col gap-1">
+        <label className="text-[13px] font-[500] text-shade-60 [font-feature-settings:'ss03']">
+          Ketik alamat secara manual
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={manualAddress}
+            onChange={(e) => setManualAddress(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); forwardGeocode(manualAddress); } }}
+            placeholder="Contoh: Jl. Merdeka No. 10, Bandung"
+            className="flex-1 bg-canvas-light text-ink font-body text-[14px] font-[420] px-[12px] py-[9px] rounded-md border border-hairline-light outline-none focus:ring-2 focus:ring-ink/20 focus:border-ink placeholder:text-shade-40 transition-colors"
+          />
+          <Button
+            variant="outline-light"
+            size="sm"
+            onClick={() => forwardGeocode(manualAddress)}
+            loading={forwardGeocoding}
+            className="shrink-0"
+          >
+            Cari
+          </Button>
+        </div>
+        <p className="text-[11px] text-shade-40">Tekan Enter atau klik Cari untuk tampilkan di peta</p>
+      </div>
+
+      {/* Divider */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-px bg-hairline-light" />
+        <span className="text-[12px] text-shade-40 font-[420]">atau pilih dari peta</span>
+        <div className="flex-1 h-px bg-hairline-light" />
+      </div>
+
       {/* Tombol lokasi terkini */}
       <Button
         variant="outline-light"
@@ -115,10 +183,10 @@ export function LocationPicker({ initialLocation, onConfirm, onCancel }: Locatio
         Gunakan Lokasi Terkini
       </Button>
 
-      {/* Peta — klik untuk pilih lokasi */}
+      {/* Peta */}
       <div className="relative">
         <GoogleMap
-          mapContainerStyle={{ width: "100%", height: "300px", borderRadius: "8px" }}
+          mapContainerStyle={{ width: "100%", height: "280px", borderRadius: "8px" }}
           center={markerPos ?? defaultCenter}
           zoom={14}
           onLoad={(map) => { mapRef.current = map; }}
@@ -144,18 +212,25 @@ export function LocationPicker({ initialLocation, onConfirm, onCancel }: Locatio
             />
           )}
         </GoogleMap>
-        <p className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[11px] px-3 py-1 rounded-pill pointer-events-none">
+        <p className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[11px] px-3 py-1 rounded-pill pointer-events-none whitespace-nowrap">
           Klik peta atau seret pin untuk memilih lokasi
         </p>
       </div>
 
-      {/* Alamat hasil geocoding */}
-      {markerPos && (
-        <div className="p-3 bg-canvas-cream rounded-md">
-          <p className="text-[12px] text-shade-50 mb-1">Alamat terdeteksi:</p>
+      {/* Alamat terpilih */}
+      {(markerPos || manualAddress.trim()) && (
+        <div className="p-3 bg-canvas-cream rounded-md border border-hairline-light">
+          <p className="text-[12px] text-shade-50 mb-1">Alamat yang akan disimpan:</p>
           <p className="text-[13px] text-ink font-[500]">
-            {geocoding ? "Mencari alamat..." : address || `${markerPos.lat.toFixed(6)}, ${markerPos.lng.toFixed(6)}`}
+            {geocoding
+              ? "Mencari alamat..."
+              : manualAddress.trim() || address || `${markerPos?.lat.toFixed(6)}, ${markerPos?.lng.toFixed(6)}`}
           </p>
+          {markerPos && (
+            <p className="text-[11px] text-shade-40 mt-1">
+              📍 {markerPos.lat.toFixed(6)}, {markerPos.lng.toFixed(6)}
+            </p>
+          )}
         </div>
       )}
 
@@ -165,7 +240,7 @@ export function LocationPicker({ initialLocation, onConfirm, onCancel }: Locatio
           variant="primary"
           size="md"
           onClick={handleConfirm}
-          disabled={!markerPos || geocoding}
+          disabled={(!markerPos && !manualAddress.trim()) || geocoding}
         >
           Konfirmasi Lokasi
         </Button>

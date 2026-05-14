@@ -6,6 +6,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { StarRating } from "@/components/ui/StarRating";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
+import api from "@/lib/api";
 
 export default function ReviewPage() {
   const params = useParams();
@@ -64,7 +65,6 @@ export default function ReviewPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate required fields
     if (laundryRating === 0) {
       setRatingError("Rating laundry wajib diisi");
       return;
@@ -74,18 +74,30 @@ export default function ReviewPage() {
     setIsSubmitting(true);
 
     try {
-      // TODO: Send review data to API
-      // await api.post(`/orders/${orderId}/review`, {
-      //   laundryRating,
-      //   laundryReview,
-      //   courierRating: courierRating || undefined,
-      //   photos,
-      // });
+      if (photos.length > 0) {
+        // Kirim dengan FormData jika ada foto
+        const formData = new FormData();
+        formData.append("laundryRating", String(laundryRating));
+        if (laundryReview) formData.append("laundryReview", laundryReview);
+        if (courierRating > 0) formData.append("driverRating", String(courierRating));
+        photos.forEach((photo) => formData.append("photos", photo));
+        await api.post(`/buyer/orders/${orderId}/review`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        await api.post(`/buyer/orders/${orderId}/review`, {
+          laundryRating,
+          laundryReview: laundryReview || undefined,
+          driverRating: courierRating > 0 ? courierRating : undefined,
+        });
+      }
 
       addToast("Ulasan berhasil dikirim", "success");
       router.push("/my-orders");
-    } catch {
-      addToast("Gagal mengirim ulasan. Silakan coba lagi.", "error");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? "Gagal mengirim ulasan. Silakan coba lagi.";
+      addToast(msg, "error");
     } finally {
       setIsSubmitting(false);
     }

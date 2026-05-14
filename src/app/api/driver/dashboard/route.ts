@@ -62,13 +62,20 @@ export async function PATCH(request: Request) {
     const driver = await prisma.driver.findUnique({ where: { userId: authUser.userId } })
     if (!driver) return unauthorized('Driver tidak ditemukan')
 
-    const { isOnline } = await request.json()
+    const body = await request.json()
+    const { isOnline, currentLatitude, currentLongitude } = body
+
+    const updateData: Record<string, unknown> = {}
+    if (isOnline !== undefined) updateData.isOnline = Boolean(isOnline)
+    if (currentLatitude !== undefined) updateData.currentLatitude = currentLatitude === null ? null : Number(currentLatitude)
+    if (currentLongitude !== undefined) updateData.currentLongitude = currentLongitude === null ? null : Number(currentLongitude)
+
     await prisma.driver.update({
       where: { id: driver.id },
-      data: { isOnline: Boolean(isOnline) },
+      data: updateData,
     })
 
-    return NextResponse.json({ success: true, data: { isOnline: Boolean(isOnline) } })
+    return NextResponse.json({ success: true, data: { isOnline: updateData.isOnline ?? driver.isOnline } })
   } catch (err) {
     console.error('[PATCH /api/driver/dashboard]', err)
     return serverError()

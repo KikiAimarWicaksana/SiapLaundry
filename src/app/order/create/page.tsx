@@ -195,8 +195,11 @@ function OrderCreateForm() {
       });
       addToast("Pesanan berhasil dibuat! Menunggu penjemputan.", "success");
       router.push("/my-orders");
-    } catch {
-      addToast("Gagal membuat pesanan. Silakan coba lagi.", "error");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? "Gagal membuat pesanan. Silakan coba lagi.";
+      addToast(msg, "error");
+      console.error("[order create]", err);
     } finally {
       setIsSubmitting(false);
     }

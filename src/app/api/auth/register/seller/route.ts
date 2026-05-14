@@ -3,6 +3,7 @@ import { z } from 'zod/v4'
 import { prisma } from '@/lib/prisma'
 import { hashPassword, signAccessToken, signRefreshToken, setAuthCookies } from '@/lib/auth'
 import { badRequest, conflict, created, serverError } from '@/lib/api-response'
+import { saveUploadedFile } from '@/lib/upload'
 
 /**
  * Register seller accepts multipart/form-data (karena ada upload foto laundry optional).
@@ -26,9 +27,17 @@ export async function POST(request: NextRequest) {
     const contentType = request.headers.get('content-type') || ''
 
     let raw: Record<string, unknown>
+    let photoFile: File | null = null
+
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData()
-      raw = Object.fromEntries(formData.entries())
+      raw = Object.fromEntries(
+        [...formData.entries()].filter(([, v]) => typeof v === 'string')
+      )
+      const photo = formData.get('photo')
+      if (photo instanceof File && photo.size > 0) {
+        photoFile = photo
+      }
     } else {
       raw = await request.json()
     }
@@ -51,6 +60,17 @@ export async function POST(request: NextRequest) {
 
     const passwordHash = await hashPassword(d.password)
 
+    // Simpan foto jika ada
+    let photos: string[] = []
+    if (photoFile) {
+      try {
+        const photoPath = await saveUploadedFile(photoFile, 'laundry')
+        photos = [photoPath]
+      } catch {
+        // Lanjut tanpa foto jika gagal
+      }
+    }
+
     const user = await prisma.user.create({
       data: {
         email: d.email,
@@ -66,6 +86,7 @@ export async function POST(request: NextRequest) {
             address: d.address,
             latitude: d.latitude,
             longitude: d.longitude,
+            photos: photos.length > 0 ? photos : undefined,
             operatingHours: { raw: d.operatingHours },
           },
         },

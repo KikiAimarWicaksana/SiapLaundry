@@ -31,15 +31,17 @@ interface OrderDetail {
 const sellerStatusFlow: OrderStatus[] = ["at_laundry", "washing", "ready_for_delivery"];
 
 function getNextStatus(current: OrderStatus): OrderStatus | null {
-  const idx = sellerStatusFlow.indexOf(current);
-  if (idx === -1 || idx >= sellerStatusFlow.length - 1) return null;
-  return sellerStatusFlow[idx + 1];
+  // at_laundry → input berat dulu (via /weight endpoint), bukan langsung next status
+  if (current === "at_laundry") return null;
+  const flow: OrderStatus[] = ["washing", "ready_for_delivery"];
+  const idx = flow.indexOf(current);
+  if (idx === -1 || idx >= flow.length - 1) return null;
+  return flow[idx + 1];
 }
 
 function getNextStatusLabel(next: OrderStatus): string {
   const labels: Partial<Record<OrderStatus, string>> = {
-    washing: "Mulai Cuci",
-    ready_for_delivery: "Selesai Dicuci",
+    ready_for_delivery: "Selesai Dicuci — Siap Diantar",
   };
   return labels[next] || "Update Status";
 }
@@ -221,37 +223,107 @@ export default function SellerOrderDetailPage() {
         <h2 className="font-display text-[16px] font-[500] text-ink mb-3">
           Berat Aktual &amp; Kalkulasi Harga
         </h2>
-        <div className="mb-4">
-          <Input
-            label="Berat Aktual (kg)"
-            type="number"
-            step="0.1"
-            min="0.1"
-            placeholder="Masukkan berat aktual"
-            value={actualWeightInput}
-            onChange={handleWeightChange}
-            error={weightError}
-          />
-        </div>
-        <div className="border-t border-hairline-light pt-3 space-y-2 text-[13px]">
-          <div className="flex justify-between">
-            <span className="text-shade-50">
-              Harga Laundry ({actualWeight ?? order.estimatedWeight ?? 0} {order.service.unit} × {formatCurrency(order.service.pricePerUnit)})
-            </span>
-            <span className="text-ink font-[500]">{formatCurrency(finalPrice)}</span>
+
+        {/* Status payment_pending — tampilkan info saja, tidak bisa edit */}
+        {order.status === "payment_pending" ? (
+          <div className="space-y-2 text-[13px]">
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md text-yellow-800 text-[13px] mb-3">
+              ⏳ Menunggu pembayaran dari customer...
+            </div>
+            <div className="flex justify-between">
+              <span className="text-shade-50">Berat Aktual</span>
+              <span className="text-ink font-[500]">{order.actualWeight} {order.service.unit}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-shade-50">Harga Laundry</span>
+              <span className="text-ink font-[500]">{formatCurrency(order.finalPrice ?? 0)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-shade-50">Biaya Antar-Jemput</span>
+              <span className="text-ink font-[500]">{formatCurrency(order.deliveryFee)}</span>
+            </div>
+            <div className="flex justify-between border-t border-hairline-light pt-2">
+              <span className="text-ink font-[600]">Total</span>
+              <span className="text-ink font-[600] text-[15px]">{formatCurrency(order.totalPrice ?? 0)}</span>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-shade-50">Biaya Antar-Jemput</span>
-            <span className="text-ink font-[500]">{formatCurrency(order.deliveryFee)}</span>
-          </div>
-          <div className="flex justify-between border-t border-hairline-light pt-2">
-            <span className="text-ink font-[600]">Total</span>
-            <span className="text-ink font-[600] text-[15px]">{formatCurrency(totalPrice)}</span>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="mb-4">
+              <Input
+                label="Berat Aktual (kg)"
+                type="number"
+                step="0.1"
+                min="0.1"
+                placeholder="Masukkan berat aktual"
+                value={actualWeightInput}
+                onChange={handleWeightChange}
+                error={weightError}
+                disabled={order.status !== "at_laundry"}
+              />
+            </div>
+            <div className="border-t border-hairline-light pt-3 space-y-2 text-[13px]">
+              <div className="flex justify-between">
+                <span className="text-shade-50">
+                  Harga Laundry ({actualWeight ?? order.estimatedWeight ?? 0} {order.service.unit} × {formatCurrency(order.service.pricePerUnit)})
+                </span>
+                <span className="text-ink font-[500]">{formatCurrency(finalPrice)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-shade-50">Biaya Antar-Jemput</span>
+                <span className="text-ink font-[500]">{formatCurrency(order.deliveryFee)}</span>
+              </div>
+              <div className="flex justify-between border-t border-hairline-light pt-2">
+                <span className="text-ink font-[600]">Total</span>
+                <span className="text-ink font-[600] text-[15px]">{formatCurrency(totalPrice)}</span>
+              </div>
+            </div>
+          </>
+        )}
       </Card>
 
-      {nextStatus && (
+      {/* Tombol konfirmasi berat (at_laundry) */}
+      {order.status === "at_laundry" && (
+        <Card variant="default" className="mb-4">
+          <h2 className="font-display text-[16px] font-[500] text-ink mb-3">Konfirmasi Berat & Kirim Tagihan</h2>
+          <p className="text-[13px] text-shade-50 mb-4">
+            Setelah berat aktual diisi, klik tombol ini untuk mengirim notifikasi pembayaran ke customer.
+          </p>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={async () => {
+              if (!actualWeight || actualWeight <= 0) {
+                setWeightError("Berat aktual harus diisi");
+                return;
+              }
+              setUpdating(true);
+              try {
+                const res = await api.post(`/seller/orders/${orderId}/weight`, { actualWeight });
+                const { finalPrice: fp, totalPrice: tp } = res.data.data;
+                setOrder((prev) => prev ? {
+                  ...prev,
+                  status: "payment_pending" as OrderStatus,
+                  actualWeight,
+                  finalPrice: fp,
+                  totalPrice: tp,
+                } : prev);
+                setSuccessMsg("Tagihan berhasil dikirim ke customer!");
+                setTimeout(() => setSuccessMsg(""), 3000);
+              } catch {
+                setError("Gagal mengirim tagihan.");
+              } finally {
+                setUpdating(false);
+              }
+            }}
+            loading={updating}
+          >
+            Konfirmasi Berat &amp; Kirim Tagihan
+          </Button>
+        </Card>
+      )}
+
+      {nextStatus && order.status !== "at_laundry" && order.status !== "payment_pending" && (
         <Card variant="default">
           <h2 className="font-display text-[16px] font-[500] text-ink mb-3">Update Status</h2>
           <p className="text-[13px] text-shade-50 mb-4">

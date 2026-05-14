@@ -31,6 +31,7 @@ interface DriverOrderDetail {
 }
 
 const STATUS_ACTIONS: Record<string, { label: string; nextStatus: string }> = {
+  confirmed: { label: "Mulai Menuju Lokasi Pickup", nextStatus: "driver_on_way_pickup" },
   pending_pickup: { label: "Mulai Menuju Lokasi Pickup", nextStatus: "driver_on_way_pickup" },
   driver_on_way_pickup: { label: "Konfirmasi Sudah Pickup", nextStatus: "picked_up" },
   picked_up: { label: "Antar ke Laundry", nextStatus: "at_laundry" },

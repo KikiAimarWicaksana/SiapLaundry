@@ -7,6 +7,7 @@ import { z } from "zod/v4";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { useAuthStore } from "@/stores/authStore";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png"];
@@ -45,6 +46,7 @@ function validateFile(file: File | null, label: string): string | null {
 
 export function RegisterDriverForm() {
   const router = useRouter();
+  const setUser = useAuthStore((state) => state.setUser);
   const [apiError, setApiError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -122,9 +124,11 @@ export function RegisterDriverForm() {
       formData.append("ktpPhoto", ktpFile!);
       formData.append("simPhoto", simFile!);
 
-      await api.post("/auth/register/driver", formData, {
+      const res = await api.post("/auth/register/driver", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      const payload = res.data.data ?? res.data;
+      if (payload?.user) setUser(payload.user);
       router.push("/driver/dashboard");
     } catch (error: unknown) {
       if (

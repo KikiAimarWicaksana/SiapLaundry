@@ -7,7 +7,9 @@ import { z } from "zod/v4";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { LocationPicker } from "@/components/maps/LocationPicker";
+import { LocationPicker } from "@/components/map/LocationPicker";
+import type { PickedLocation } from "@/components/map/LocationPicker";
+import { useAuthStore } from "@/stores/authStore";
 
 const buyerSchema = z
   .object({
@@ -41,6 +43,7 @@ type BuyerFormData = z.infer<typeof buyerSchema>;
 
 export function RegisterBuyerForm() {
   const router = useRouter();
+  const setUser = useAuthStore((state) => state.setUser);
   const [apiError, setApiError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -64,17 +67,17 @@ export function RegisterBuyerForm() {
     },
   });
 
-  const handleLocationSelect = (lat: number, lng: number, address: string) => {
-    setValue("address", address, { shouldValidate: true });
-    setValue("latitude", lat);
-    setValue("longitude", lng);
+  const handleLocationSelect = (loc: PickedLocation) => {
+    setValue("address", loc.address, { shouldValidate: true });
+    setValue("latitude", loc.lat);
+    setValue("longitude", loc.lng);
   };
 
   const onSubmit = async (data: BuyerFormData) => {
     setApiError(null);
     try {
       const { default: api } = await import("@/lib/api");
-      await api.post("/auth/register/buyer", {
+      const res = await api.post("/auth/register/buyer", {
         name: data.name,
         email: data.email,
         phone: data.phone,
@@ -83,6 +86,11 @@ export function RegisterBuyerForm() {
         latitude: data.latitude,
         longitude: data.longitude,
       });
+      // Simpan user ke Zustand agar Navbar langsung update
+      const payload = res.data.data ?? res.data;
+      if (payload?.user) {
+        setUser(payload.user);
+      }
       router.push("/explore");
     } catch (error: unknown) {
       if (
@@ -223,11 +231,20 @@ export function RegisterBuyerForm() {
       </div>
 
       {/* Alamat + LocationPicker */}
-      <LocationPicker
-        onLocationSelect={handleLocationSelect}
-        label="Alamat Lengkap"
-        error={errors.address?.message}
-      />
+      <div className="flex flex-col gap-[4px]">
+        <label className="text-[14px] font-[500] leading-[1.49] tracking-[0.28px] text-ink [font-feature-settings:'ss03']">
+          Alamat Rumah
+        </label>
+        <LocationPicker
+          onConfirm={handleLocationSelect}
+          onCancel={() => {}}
+        />
+        {errors.address && (
+          <p className="text-[13px] font-[500] text-red-600 leading-[1.5]" role="alert">
+            {errors.address.message}
+          </p>
+        )}
+      </div>
 
       {/* API Error */}
       {apiError && (

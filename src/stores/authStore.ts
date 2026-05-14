@@ -9,7 +9,7 @@ export interface AuthStoreState {
 
 export interface AuthStoreActions {
   login: (credentials: LoginCredentials) => Promise<void>
-  logout: () => void
+  logout: (redirect?: boolean) => void
   refreshToken: () => Promise<void>
   setUser: (user: AuthUser | null) => void
 }
@@ -36,13 +36,16 @@ export const useAuthStore = create<AuthStore>((set) => ({
     })
   },
 
-  logout: async () => {
-    try {
-      const { default: api } = await import('@/lib/api')
-      // Call API to clear httpOnly cookie server-side
-      await api.post('/auth/logout')
-    } catch {
-      // Clear state even if API call fails
+  logout: async (redirect = true) => {
+    // Hanya panggil API logout jika redirect=true (logout manual)
+    // Untuk idle logout, API sudah dipanggil manual di IdleLogout component
+    if (redirect) {
+      try {
+        const { default: api } = await import('@/lib/api')
+        await api.post('/auth/logout')
+      } catch {
+        // Clear state even if API call fails
+      }
     }
 
     set({
@@ -51,8 +54,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       isAuthenticated: false,
     })
 
-    // Redirect to landing page
-    if (typeof window !== 'undefined') {
+    if (redirect && typeof window !== 'undefined') {
       window.location.href = '/'
     }
   },

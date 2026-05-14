@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
+import api from "@/lib/api";
 
 export interface NavbarProps {
   variant: "dark" | "light";
@@ -147,9 +149,59 @@ function NavbarDark({ mobileMenuOpen, setMobileMenuOpen }: NavbarInternalProps) 
 }
 
 function NavbarLight({ mobileMenuOpen, setMobileMenuOpen }: NavbarInternalProps) {
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const unreadCount = useNotificationStore((state) => state.unreadCount);
+  const { notifications, unreadCount, setNotifications, markAsRead, markAllAsRead } = useNotificationStore();
+  const [bellOpen, setBellOpen] = useState(false);
+  const bellRef = useRef<HTMLDivElement>(null);
+
+  // Fetch notifikasi dari API
+  const fetchNotifications = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const res = await api.get("/notifications");
+      setNotifications(res.data.data ?? []);
+    } catch {
+      // silent
+    }
+  }, [isAuthenticated, setNotifications]);
+
+  useEffect(() => {
+    fetchNotifications();
+    // Poll setiap 30 detik
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  // Tutup dropdown saat klik di luar
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setBellOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleMarkAllRead = async () => {
+    markAllAsRead();
+    try { await api.patch("/notifications", { markAll: true }); } catch { /* silent */ }
+  };
+
+  const handleMarkRead = async (id: string, relatedId?: string | null, type?: string) => {
+    markAsRead(id);
+    try { await api.patch("/notifications", { id }); } catch { /* silent */ }
+    setBellOpen(false);
+    // Navigasi ke detail order jika notifikasi terkait order
+    if (type === "order" && relatedId) {
+      const role = user?.role;
+      if (role === "buyer") router.push(`/order/${relatedId}`);
+      else if (role === "seller") router.push(`/seller/orders/${relatedId}`);
+      else if (role === "driver") router.push(`/driver/orders/${relatedId}`);
+    }
+  };
 
   const navLinks = [
     { href: "/explore", label: "Explore" },
@@ -164,73 +216,107 @@ function NavbarLight({ mobileMenuOpen, setMobileMenuOpen }: NavbarInternalProps)
     >
       <div className="max-w-[1280px] mx-auto flex items-center justify-between">
         {/* Logo */}
-        <Link
-          href="/"
-          className="font-display text-xl font-[330] text-ink tracking-wide [font-feature-settings:'ss03']"
-        >
+        <Link href="/" className="font-display text-xl font-[330] text-ink tracking-wide [font-feature-settings:'ss03']">
           SiapLaundry
         </Link>
 
         {isAuthenticated ? (
           <>
-            {/* Center nav links (desktop) — logged in */}
+            {/* Nav links desktop */}
             <div className="hidden md:flex items-center gap-6">
               {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="font-body text-base font-[420] text-ink hover:text-shade-60 transition-colors [font-feature-settings:'ss03']"
-                >
+                <Link key={link.href} href={link.href}
+                  className="font-body text-base font-[420] text-ink hover:text-shade-60 transition-colors [font-feature-settings:'ss03']">
                   {link.label}
                 </Link>
               ))}
             </div>
 
-            {/* Right side: notification bell + avatar (desktop) */}
+            {/* Bell + Avatar desktop */}
             <div className="hidden md:flex items-center gap-4">
-              <Link
-                href="/notifications"
-                className="relative p-2 text-ink hover:text-shade-60 transition-colors"
-                aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
-              >
-                <BellIcon />
-                {unreadCount > 0 && (
-                  <span
-                    className="absolute top-1 right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-canvas-light text-[11px] font-[500] leading-none px-1"
-                    aria-hidden="true"
-                  >
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
+              {/* Notification Bell Dropdown */}
+              <div ref={bellRef} className="relative">
+                <button
+                  onClick={() => setBellOpen((v) => !v)}
+                  className="relative p-2 text-ink hover:text-shade-60 transition-colors"
+                  aria-label={`Notifikasi${unreadCount > 0 ? `, ${unreadCount} belum dibaca` : ""}`}
+                >
+                  <BellIcon />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-canvas-light text-[11px] font-[500] leading-none px-1" aria-hidden="true">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Dropdown */}
+                {bellOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-[360px] bg-canvas-light rounded-lg border border-hairline-light shadow-[0_8px_24px_rgba(0,0,0,0.12)] z-50 overflow-hidden">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-hairline-light">
+                      <h3 className="font-body text-[14px] font-[550] text-ink">Notifikasi</h3>
+                      {unreadCount > 0 && (
+                        <button onClick={handleMarkAllRead}
+                          className="text-[12px] text-shade-50 hover:text-ink transition-colors">
+                          Tandai semua dibaca
+                        </button>
+                      )}
+                    </div>
+
+                    {/* List */}
+                    <div className="max-h-[400px] overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="py-8 text-center">
+                          <p className="text-[13px] text-shade-40">Tidak ada notifikasi</p>
+                        </div>
+                      ) : (
+                        notifications.map((notif) => (
+                          <button
+                            key={notif.id}
+                            onClick={() => handleMarkRead(notif.id, notif.relatedId, notif.type)}
+                            className={[
+                              "w-full text-left px-4 py-3 border-b border-hairline-light last:border-b-0",
+                              "hover:bg-canvas-cream transition-colors",
+                              !notif.isRead ? "bg-blue-50/50" : "",
+                            ].join(" ")}
+                          >
+                            <div className="flex items-start gap-3">
+                              {!notif.isRead && (
+                                <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                              )}
+                              <div className={!notif.isRead ? "" : "pl-5"}>
+                                <p className="text-[13px] font-[550] text-ink leading-[1.4]">{notif.title}</p>
+                                <p className="text-[12px] text-shade-50 mt-0.5 leading-[1.5]">{notif.message}</p>
+                                <p className="text-[11px] text-shade-40 mt-1">
+                                  {new Date(notif.createdAt).toLocaleDateString("id-ID", {
+                                    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 )}
-              </Link>
+              </div>
+
               <Link href="/profile" aria-label="Profile">
                 <Avatar src={user?.profilePhoto} name={user?.name} size="sm" />
               </Link>
             </div>
           </>
         ) : (
-          /* Right side: Masuk + Daftar (desktop) — not logged in */
           <div className="hidden md:flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="outline-light" size="sm">
-                Masuk
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button variant="primary" size="sm">
-                Daftar
-              </Button>
-            </Link>
+            <Link href="/login"><Button variant="outline-light" size="sm">Masuk</Button></Link>
+            <Link href="/register"><Button variant="primary" size="sm">Daftar</Button></Link>
           </div>
         )}
 
         {/* Mobile hamburger */}
-        <button
-          className="md:hidden p-2 text-ink"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={mobileMenuOpen}
-        >
+        <button className="md:hidden p-2 text-ink" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"} aria-expanded={mobileMenuOpen}>
           {mobileMenuOpen ? <CloseIcon /> : <HamburgerIcon />}
         </button>
       </div>
@@ -241,29 +327,21 @@ function NavbarLight({ mobileMenuOpen, setMobileMenuOpen }: NavbarInternalProps)
           {isAuthenticated ? (
             <>
               {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
+                <Link key={link.href} href={link.href}
                   className="font-body text-base font-[420] text-ink py-2 [font-feature-settings:'ss03']"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
+                  onClick={() => setMobileMenuOpen(false)}>
                   {link.label}
                 </Link>
               ))}
               <div className="flex items-center gap-4 pt-2 border-t border-hairline-light mt-2">
-                <Link
-                  href="/notifications"
-                  className="relative p-2 text-ink"
-                  aria-label="Notifications"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
+                <div className="relative p-2 text-ink">
                   <BellIcon />
                   {unreadCount > 0 && (
                     <span className="absolute top-1 right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-canvas-light text-[11px] font-[500] leading-none px-1">
                       {unreadCount > 99 ? "99+" : unreadCount}
                     </span>
                   )}
-                </Link>
+                </div>
                 <Link href="/profile" aria-label="Profile" onClick={() => setMobileMenuOpen(false)}>
                   <Avatar src={user?.profilePhoto} name={user?.name} size="sm" />
                 </Link>
@@ -272,14 +350,10 @@ function NavbarLight({ mobileMenuOpen, setMobileMenuOpen }: NavbarInternalProps)
           ) : (
             <>
               <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
-                <Button variant="outline-light" size="sm" className="w-full">
-                  Masuk
-                </Button>
+                <Button variant="outline-light" size="sm" className="w-full">Masuk</Button>
               </Link>
               <Link href="/register" onClick={() => setMobileMenuOpen(false)}>
-                <Button variant="primary" size="sm" className="w-full">
-                  Daftar
-                </Button>
+                <Button variant="primary" size="sm" className="w-full">Daftar</Button>
               </Link>
             </>
           )}

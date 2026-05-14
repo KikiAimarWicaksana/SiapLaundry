@@ -99,6 +99,36 @@ export async function PATCH(
       }
     }
 
+    // Saat ready_for_delivery: assign deliveryDriverId
+    // Gunakan kurir yang sama dengan pickup, atau cari kurir online terdekat
+    let deliveryDriverId: number | undefined
+    if (status === 'ready_for_delivery') {
+      if (order.pickupDriverId) {
+        // Pakai kurir yang sama
+        deliveryDriverId = order.pickupDriverId
+      } else {
+        // Cari kurir online
+        const driver = await prisma.driver.findFirst({ where: { isOnline: true } })
+        if (driver) deliveryDriverId = driver.id
+      }
+
+      // Notifikasi ke driver
+      if (deliveryDriverId) {
+        const driver = await prisma.driver.findUnique({ where: { id: deliveryDriverId } })
+        if (driver) {
+          await prisma.notification.create({
+            data: {
+              userId: driver.userId,
+              title: 'Order Delivery Baru',
+              message: `Cucian order #${order.orderNumber} siap diantar ke customer.`,
+              type: 'order',
+              relatedId: order.id,
+            },
+          })
+        }
+      }
+    }
+
     const updated = await prisma.order.update({
       where: { id: Number(orderId) },
       data: {
@@ -106,6 +136,7 @@ export async function PATCH(
         ...(actualWeight ? { actualWeight } : {}),
         ...(finalPrice !== undefined ? { finalPrice } : {}),
         ...(totalPrice !== undefined ? { totalPrice } : {}),
+        ...(deliveryDriverId !== undefined ? { deliveryDriverId } : {}),
       },
     })
 

@@ -10,6 +10,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { TrackingMap } from "@/components/map/TrackingMap";
 import api from "@/lib/api";
+import { formatCurrency } from "@/lib/utils";
 import type { OrderStatus } from "@/types/order";
 import type { TimelineEvent } from "@/components/order/OrderTimeline";
 
@@ -41,10 +42,13 @@ interface OrderDetail {
 }
 
 const STATUS_LABELS: Record<string, string> = {
+  pending_confirmation: "Menunggu Konfirmasi Laundry",
+  confirmed: "Pesanan Dikonfirmasi",
   pending_pickup: "Menunggu Penjemputan",
   driver_on_way_pickup: "Kurir Menuju Lokasi",
   picked_up: "Pakaian Dijemput",
   at_laundry: "Di Laundry",
+  payment_pending: "Menunggu Pembayaran",
   washing: "Sedang Dicuci",
   ready_for_delivery: "Siap Diantar",
   driver_on_way_delivery: "Kurir Mengantar",
@@ -64,10 +68,6 @@ function formatTimestamp(dateStr: string): string {
     day: "numeric", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
-}
-
-function formatCurrency(amount: number): string {
-  return `Rp ${amount.toLocaleString("id-ID")}`;
 }
 
 function PhoneIcon() {
@@ -147,6 +147,157 @@ function DriverInfoSection({ title, driver, orderId }: DriverInfoSectionProps) {
         </Link>
       </div>
     </section>
+  );
+}
+
+function CompleteOrderButton({ orderId, onSuccess }: { orderId: string; onSuccess: () => void }) {
+  const [completing, setCompleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ laundryRevenue: number; deliveryFee: number } | null>(null);
+
+  const handleComplete = async () => {
+    setCompleting(true);
+    setError(null);
+    try {
+      const res = await api.post(`/buyer/orders/${orderId}/complete`);
+      setResult(res.data.data);
+      onSuccess();
+    } catch {
+      setError("Gagal mengkonfirmasi pesanan selesai.");
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  if (result) {
+    return (
+      <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+        <p className="text-[15px] font-[600] text-green-800 mb-1">✅ Pesanan Selesai!</p>
+        <p className="text-[13px] text-green-700">
+          Dana telah dikirim ke mitra laundry dan kurir.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-canvas-light rounded-lg border border-hairline-light p-4 md:p-6">
+      <h2 className="font-body text-[14px] font-[550] text-shade-50 uppercase tracking-wider mb-3">
+        Konfirmasi Penerimaan
+      </h2>
+      <p className="text-[13px] text-shade-60 mb-4 leading-[1.6]">
+        Pakaian Anda sudah diterima? Klik tombol di bawah untuk mengkonfirmasi pesanan selesai.
+        Dana akan otomatis dikirim ke mitra laundry dan kurir.
+      </p>
+      {error && <p className="text-[13px] text-red-600 mb-3">{error}</p>}
+      <Button
+        variant="primary"
+        size="lg"
+        onClick={handleComplete}
+        loading={completing}
+        className="w-full"
+      >
+        ✓ Pesanan Selesai — Kirim Dana ke Mitra
+      </Button>
+    </div>
+  );
+}
+
+function PayButton({ orderId, onSuccess }: { orderId: string; onSuccess: () => void }) {
+  const [method, setMethod] = useState<"transfer" | "cash" | "ewallet">("transfer");
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showVA, setShowVA] = useState(false);
+
+  // Generate nomor VA demo deterministik dari orderId
+  const vaNumber = `8277 0${orderId.slice(-4).padStart(4, "0")} ${Math.abs(parseInt(orderId) * 7919 % 100000).toString().padStart(5, "0")}`;
+  const bankOptions = {
+    transfer: { bank: "BCA Virtual Account", va: `8277 ${vaNumber}` },
+    ewallet: { bank: "GoPay / OVO / Dana", va: `08${orderId.slice(-8).padStart(8, "0")}` },
+    cash: null,
+  };
+
+  const handlePay = async () => {
+    if (method === "transfer" || method === "ewallet") {
+      setShowVA(true);
+      return;
+    }
+    await doPayment();
+  };
+
+  const doPayment = async () => {
+    setPaying(true);
+    setError(null);
+    try {
+      await api.post(`/buyer/orders/${orderId}/pay`, { paymentMethod: method });
+      onSuccess();
+    } catch {
+      setError("Gagal memproses pembayaran. Silakan coba lagi.");
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  if (showVA && method !== "cash") {
+    const info = bankOptions[method as "transfer" | "ewallet"];
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-[12px] text-blue-600 font-[500] uppercase tracking-wider mb-2">
+            {info?.bank}
+          </p>
+          <p className="text-[24px] font-[700] text-ink tracking-[0.1em] font-mono">
+            {info?.va}
+          </p>
+          <p className="text-[12px] text-shade-50 mt-2">
+            * Nomor VA ini hanya untuk keperluan demo
+          </p>
+        </div>
+        <div className="p-3 bg-canvas-cream rounded-md text-[13px] text-shade-60 space-y-1">
+          <p>1. Buka aplikasi mobile banking / e-wallet Anda</p>
+          <p>2. Pilih Transfer / Bayar Virtual Account</p>
+          <p>3. Masukkan nomor VA di atas</p>
+          <p>4. Konfirmasi pembayaran</p>
+          <p>5. Klik tombol <strong>"Konfirmasi Sudah Bayar"</strong> di bawah</p>
+        </div>
+        {error && <p className="text-[13px] text-red-600">{error}</p>}
+        <div className="flex gap-3">
+          <Button variant="primary" size="lg" onClick={doPayment} loading={paying} className="flex-1">
+            Konfirmasi Sudah Bayar
+          </Button>
+          <Button variant="outline-light" size="md" onClick={() => setShowVA(false)}>
+            Kembali
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {error && <p className="text-[13px] text-red-600">{error}</p>}
+      <div className="flex flex-col gap-2">
+        <label className="text-[13px] font-[500] text-ink">Metode Pembayaran</label>
+        <div className="flex gap-2 flex-wrap">
+          {(["transfer", "ewallet", "cash"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMethod(m)}
+              className={[
+                "px-4 py-2 rounded-pill text-[13px] font-[500] border transition-colors",
+                method === m ? "bg-ink text-canvas-light border-ink" : "bg-transparent text-ink border-hairline-light hover:border-ink",
+              ].join(" ")}
+            >
+              {m === "transfer" ? "Transfer Bank" : m === "cash" ? "Tunai (COD)" : "E-Wallet"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Button variant="primary" size="lg" onClick={handlePay} loading={paying} className="w-full">
+        {method === "cash" ? "Bayar Tunai ke Kurir" : "Lihat Nomor Pembayaran"}
+      </Button>
+    </div>
   );
 }
 
@@ -348,16 +499,54 @@ export default function OrderDetailPage() {
         </section>
 
         {/* Action Buttons */}
-        {(showTrackDriver || showReviewButton) && (
+        {(showTrackDriver || showReviewButton || order.status === "payment_pending" || order.status === "delivered") && (
           <section className="flex flex-col gap-3">
+            {/* Tombol Bayar */}
+            {order.status === "payment_pending" && (
+              <div className="bg-canvas-light rounded-lg border border-hairline-light p-4 md:p-6">
+                <h2 className="font-body text-[14px] font-[550] text-shade-50 uppercase tracking-wider mb-3 [font-feature-settings:'ss03']">
+                  Konfirmasi Pembayaran
+                </h2>
+                <div className="mb-4 space-y-2 text-[13px]">
+                  <div className="flex justify-between">
+                    <span className="text-shade-50">Berat Aktual</span>
+                    <span className="text-ink font-[500]">{order.actualWeight} {order.service.unit}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-shade-50">Harga Laundry</span>
+                    <span className="text-ink font-[500]">{formatCurrency(order.finalPrice ?? 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-shade-50">Biaya Antar-Jemput</span>
+                    <span className="text-ink font-[500]">{formatCurrency(order.deliveryFee)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-hairline-light pt-2">
+                    <span className="text-ink font-[600]">Total Tagihan</span>
+                    <span className="text-ink font-[600] text-[16px]">{formatCurrency(order.totalPrice ?? 0)}</span>
+                  </div>
+                </div>
+                <PayButton orderId={order.id} onSuccess={() => {
+                  setOrder((prev) => prev ? { ...prev, status: "washing" as typeof order.status, paymentStatus: "paid" } : prev);
+                }} />
+              </div>
+            )}
+
             {showTrackDriver && (
               <div className="w-full p-3 bg-aloe-10 rounded-lg text-center">
-                <p className="text-[13px] text-ink font-[500]">
+                <p className="text-[13px] text-ink font-[500] flex items-center justify-center gap-1">
                   <LocationIcon />
                   Kurir sedang dalam perjalanan — peta di atas diperbarui otomatis
                 </p>
               </div>
             )}
+
+            {/* Tombol Pesanan Selesai — muncul saat status delivered */}
+            {order.status === "delivered" && (
+              <CompleteOrderButton orderId={order.id} onSuccess={() => {
+                setOrder((prev) => prev ? { ...prev, status: "completed" as typeof order.status } : prev);
+              }} />
+            )}
+
             {showReviewButton && (
               <Link href={`/order/${order.id}/review`} className="w-full">
                 <Button variant="primary" size="lg" className="w-full gap-2">

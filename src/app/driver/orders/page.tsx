@@ -29,12 +29,13 @@ function LocationIcon() {
 
 function getActionButton(status: string, type: "pickup" | "delivery") {
   if (type === "pickup") {
+    if (status === "confirmed") return { label: "Mulai Jemput", variant: "aloe" as const };
     if (status === "pending_pickup") return { label: "Ambil Order", variant: "aloe" as const };
-    if (status === "driver_on_way_pickup") return { label: "Mulai Pickup", variant: "primary" as const };
+    if (status === "driver_on_way_pickup") return { label: "Konfirmasi Pickup", variant: "primary" as const };
   }
   if (type === "delivery") {
-    if (status === "ready_for_delivery") return { label: "Ambil Order", variant: "aloe" as const };
-    if (status === "driver_on_way_delivery") return { label: "Mulai Delivery", variant: "primary" as const };
+    if (status === "ready_for_delivery") return { label: "Ambil dari Laundry", variant: "aloe" as const };
+    if (status === "driver_on_way_delivery") return { label: "Konfirmasi Delivery", variant: "primary" as const };
   }
   return { label: "Lihat Detail", variant: "outline-light" as const };
 }

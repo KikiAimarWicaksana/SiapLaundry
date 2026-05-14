@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Tabs } from "@/components/ui/Tabs";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { OrderStatusBadge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import api from "@/lib/api";
@@ -24,65 +25,69 @@ interface SellerOrder {
   pickupAddress: string;
 }
 
-type TabValue = "baru" | "proses" | "siap" | "selesai";
+type TabValue = "konfirmasi" | "baru" | "proses" | "bayar" | "selesai";
 
-const tabStatusMap: Record<TabValue, OrderStatus[]> = {
-  baru: ["pending_pickup", "picked_up", "at_laundry"],
+const tabStatusMap: Record<TabValue, string[]> = {
+  konfirmasi: ["pending_confirmation"],
+  baru: ["confirmed", "pending_pickup", "picked_up", "at_laundry"],
   proses: ["washing"],
-  siap: ["ready_for_delivery"],
-  selesai: ["delivered", "completed"],
+  bayar: ["payment_pending"],
+  selesai: ["ready_for_delivery", "driver_on_way_delivery", "delivered", "completed"],
 };
 
-function getActionButton(status: OrderStatus, orderId: string) {
-  switch (status) {
-    case "pending_pickup":
-    case "picked_up":
-    case "at_laundry":
-      return (
-        <Link href={`/seller/orders/${orderId}`}>
-          <Button variant="aloe" size="sm">Konfirmasi Order</Button>
-        </Link>
-      );
-    case "washing":
-      return (
-        <Link href={`/seller/orders/${orderId}`}>
-          <Button variant="primary" size="sm">Selesai Dicuci</Button>
-        </Link>
-      );
-    case "ready_for_delivery":
-      return (
-        <Link href={`/seller/orders/${orderId}`}>
-          <Button variant="primary" size="sm">Lihat Detail</Button>
-        </Link>
-      );
-    default:
-      return (
-        <Link href={`/seller/orders/${orderId}`}>
-          <Button variant="outline-light" size="sm">Detail</Button>
-        </Link>
-      );
-  }
-}
-
 export default function SellerOrdersPage() {
-  const [activeTab, setActiveTab] = useState<TabValue>("baru");
+  const [activeTab, setActiveTab] = useState<TabValue>("konfirmasi");
   const [orders, setOrders] = useState<SellerOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchOrders() {
-      try {
-        const res = await api.get("/seller/orders");
-        setOrders(res.data.data);
-      } catch {
-        setError("Gagal memuat data order.");
-      } finally {
-        setLoading(false);
-      }
+  // Reject modal
+  const [rejectOrderId, setRejectOrderId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [processing, setProcessing] = useState<string | null>(null);
+
+  const fetchOrders = useCallback(async () => {
+    try {
+      const res = await api.get("/seller/orders");
+      setOrders(res.data.data);
+    } catch {
+      setError("Gagal memuat data order.");
+    } finally {
+      setLoading(false);
     }
-    fetchOrders();
   }, []);
+
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  const handleAccept = async (orderId: string) => {
+    setProcessing(orderId);
+    try {
+      await api.post(`/seller/orders/${orderId}/confirm`, { action: "accept" });
+      await fetchOrders();
+    } catch {
+      setError("Gagal mengkonfirmasi order.");
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejectOrderId) return;
+    setProcessing(rejectOrderId);
+    try {
+      await api.post(`/seller/orders/${rejectOrderId}/confirm`, {
+        action: "reject",
+        rejectReason,
+      });
+      setRejectOrderId(null);
+      setRejectReason("");
+      await fetchOrders();
+    } catch {
+      setError("Gagal menolak order.");
+    } finally {
+      setProcessing(null);
+    }
+  };
 
   const filteredOrders = orders.filter((o) =>
     tabStatusMap[activeTab].includes(o.status)
@@ -90,6 +95,56 @@ export default function SellerOrdersPage() {
 
   const count = (tab: TabValue) =>
     orders.filter((o) => tabStatusMap[tab].includes(o.status)).length;
+
+  function getActionButton(order: SellerOrder) {
+    switch (order.status) {
+      case "pending_confirmation":
+        return (
+          <div className="flex gap-2">
+            <Button
+              variant="aloe"
+              size="sm"
+              onClick={() => handleAccept(order.id)}
+              loading={processing === order.id}
+            >
+              Terima
+            </Button>
+            <Button
+              variant="outline-light"
+              size="sm"
+              onClick={() => { setRejectOrderId(order.id); setRejectReason(""); }}
+              className="text-red-600 border-red-200 hover:bg-red-50"
+            >
+              Tolak
+            </Button>
+          </div>
+        );
+      case "at_laundry":
+        return (
+          <Link href={`/seller/orders/${order.id}`}>
+            <Button variant="primary" size="sm">Input Berat</Button>
+          </Link>
+        );
+      case "payment_pending":
+        return (
+          <Link href={`/seller/orders/${order.id}`}>
+            <Button variant="outline-light" size="sm">Lihat Detail</Button>
+          </Link>
+        );
+      case "washing":
+        return (
+          <Link href={`/seller/orders/${order.id}`}>
+            <Button variant="primary" size="sm">Selesai Dicuci</Button>
+          </Link>
+        );
+      default:
+        return (
+          <Link href={`/seller/orders/${order.id}`}>
+            <Button variant="outline-light" size="sm">Detail</Button>
+          </Link>
+        );
+    }
+  }
 
   return (
     <div>
@@ -105,9 +160,10 @@ export default function SellerOrdersPage() {
 
       <Tabs
         items={[
-          { label: "Order Baru", value: "baru", badge: count("baru") },
-          { label: "Sedang Proses", value: "proses", badge: count("proses") },
-          { label: "Siap Diantar", value: "siap", badge: count("siap") },
+          { label: "Konfirmasi", value: "konfirmasi", badge: count("konfirmasi") },
+          { label: "Dijemput", value: "baru", badge: count("baru") },
+          { label: "Menunggu Bayar", value: "bayar", badge: count("bayar") },
+          { label: "Proses Cuci", value: "proses", badge: count("proses") },
           { label: "Selesai", value: "selesai" },
         ]}
         value={activeTab}
@@ -152,14 +208,49 @@ export default function SellerOrdersPage() {
                   </div>
                   <p className="text-[12px] text-shade-40 mt-1">{order.pickupAddress}</p>
                 </div>
-                <div className="flex-shrink-0">
-                  {getActionButton(order.status, order.id)}
-                </div>
+                <div className="flex-shrink-0">{getActionButton(order)}</div>
               </div>
             </Card>
           ))
         )}
       </div>
+
+      {/* Modal Tolak Order */}
+      <Modal
+        isOpen={!!rejectOrderId}
+        onClose={() => setRejectOrderId(null)}
+        title="Tolak Pesanan"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-[14px] text-shade-60">
+            Berikan alasan penolakan agar customer mengetahui penyebabnya.
+          </p>
+          <div className="flex flex-col gap-1">
+            <label className="text-[14px] font-[500] text-ink">Alasan (opsional)</label>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              rows={3}
+              placeholder="Contoh: Kapasitas penuh, sedang tutup, dll."
+              className="bg-canvas-light text-ink font-body text-[14px] px-[12px] py-[10px] rounded-md border border-hairline-light outline-none focus:ring-2 focus:ring-ink/20 focus:border-ink resize-none"
+            />
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handleReject}
+              loading={!!processing}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Ya, Tolak Pesanan
+            </Button>
+            <Button variant="outline-light" size="md" onClick={() => setRejectOrderId(null)}>
+              Batal
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

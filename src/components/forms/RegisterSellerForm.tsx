@@ -7,7 +7,9 @@ import { z } from "zod/v4";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { LocationPicker } from "@/components/maps/LocationPicker";
+import { LocationPicker } from "@/components/map/LocationPicker";
+import type { PickedLocation } from "@/components/map/LocationPicker";
+import { useAuthStore } from "@/stores/authStore";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png"];
@@ -43,6 +45,7 @@ type SellerFormData = z.infer<typeof sellerSchema>;
 
 export function RegisterSellerForm() {
   const router = useRouter();
+  const setUser = useAuthStore((state) => state.setUser);
   const [apiError, setApiError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -68,10 +71,10 @@ export function RegisterSellerForm() {
     },
   });
 
-  const handleLocationSelect = (lat: number, lng: number, address: string) => {
-    setValue("address", address, { shouldValidate: true });
-    setValue("latitude", lat);
-    setValue("longitude", lng);
+  const handleLocationSelect = (loc: PickedLocation) => {
+    setValue("address", loc.address, { shouldValidate: true });
+    setValue("latitude", loc.lat);
+    setValue("longitude", loc.lng);
   };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,9 +116,11 @@ export function RegisterSellerForm() {
         formData.append("photo", photoFile);
       }
 
-      await api.post("/auth/register/seller", formData, {
+      const res = await api.post("/auth/register/seller", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      const payload = res.data.data ?? res.data;
+      if (payload?.user) setUser(payload.user);
       router.push("/seller/dashboard");
     } catch (error: unknown) {
       if (
@@ -218,11 +223,20 @@ export function RegisterSellerForm() {
       </div>
 
       {/* Alamat + LocationPicker */}
-      <LocationPicker
-        onLocationSelect={handleLocationSelect}
-        label="Alamat Laundry"
-        error={errors.address?.message}
-      />
+      <div className="flex flex-col gap-[4px]">
+        <label className="text-[14px] font-[500] leading-[1.49] tracking-[0.28px] text-ink [font-feature-settings:'ss03']">
+          Alamat Laundry
+        </label>
+        <LocationPicker
+          onConfirm={handleLocationSelect}
+          onCancel={() => {}}
+        />
+        {errors.address && (
+          <p className="text-[13px] font-[500] text-red-600 leading-[1.5]" role="alert">
+            {errors.address.message}
+          </p>
+        )}
+      </div>
 
       {/* Foto Laundry (optional) */}
       <div className="flex flex-col gap-[4px]">

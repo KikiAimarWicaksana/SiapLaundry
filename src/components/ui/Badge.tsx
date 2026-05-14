@@ -42,10 +42,13 @@ const statusConfig: Record<
   OrderStatus,
   { label: string; colorClass: string }
 > = {
+  pending_confirmation: { label: "Menunggu Konfirmasi", colorClass: "bg-orange-100 text-orange-800" },
+  confirmed: { label: "Dikonfirmasi", colorClass: "bg-blue-100 text-blue-800" },
   pending_pickup: { label: "Menunggu Pickup", colorClass: "bg-yellow-100 text-yellow-800" },
   driver_on_way_pickup: { label: "Sedang Dijemput", colorClass: "bg-blue-100 text-blue-800" },
   picked_up: { label: "Pakaian Diambil", colorClass: "bg-blue-100 text-blue-800" },
   at_laundry: { label: "Di Laundry", colorClass: "bg-green-100 text-green-800" },
+  payment_pending: { label: "Menunggu Pembayaran", colorClass: "bg-yellow-100 text-yellow-800" },
   washing: { label: "Sedang Dicuci", colorClass: "bg-green-100 text-green-800" },
   ready_for_delivery: { label: "Siap Diantar", colorClass: "bg-purple-100 text-purple-800" },
   driver_on_way_delivery: { label: "Sedang Diantar", colorClass: "bg-orange-100 text-orange-800" },
@@ -60,7 +63,7 @@ export interface OrderStatusBadgeProps {
 }
 
 export function OrderStatusBadge({ status, className = "" }: OrderStatusBadgeProps) {
-  const config = statusConfig[status];
+  const config = statusConfig[status] ?? { label: status, colorClass: "bg-shade-30 text-ink" };
 
   return (
     <span
