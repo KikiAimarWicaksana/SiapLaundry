@@ -7,11 +7,11 @@ import { saveUploadedFile } from '@/lib/upload'
 
 const updateSchema = z.object({
   laundryName: z.string().min(1).max(100).optional(),
-  address: z.string().min(1).max(300).optional(),
-  phone: z.string().min(10).max(15).optional(),
-  operatingHoursOpen: z.string().optional(),
-  operatingHoursClose: z.string().optional(),
+  address: z.string().min(1).max(1000).optional(),
+  phone: z.string().min(10).max(20).optional(),
+  operatingHours: z.string().optional(),
   isOpen: z.coerce.boolean().optional(),
+  photos: z.array(z.string()).optional(),
 })
 
 export async function GET() {
@@ -74,10 +74,10 @@ export async function PATCH(request: NextRequest) {
     const parsed = updateSchema.safeParse(raw)
     if (!parsed.success) return badRequest('Data tidak valid')
 
-    const { laundryName, address, phone, operatingHoursOpen, operatingHoursClose, isOpen } = parsed.data
+    const { laundryName, address, phone, operatingHours, isOpen, photos: photosFromClient } = parsed.data
 
     // Upload foto baru ke Cloudinary jika ada
-    let photos = (seller.photos as string[]) ?? []
+    let photos = photosFromClient ?? (seller.photos as string[]) ?? []
     if (photoFile) {
       const url = await saveUploadedFile(photoFile, 'laundry')
       photos = [url, ...photos].slice(0, 5) // max 5 foto
@@ -88,13 +88,8 @@ export async function PATCH(request: NextRequest) {
     if (laundryName) updateData.laundryName = laundryName
     if (address) updateData.address = address
     if (isOpen !== undefined) updateData.isOpen = isOpen
-    if (operatingHoursOpen || operatingHoursClose) {
-      const existing = (seller.operatingHours as { raw?: string })?.raw ?? ''
-      updateData.operatingHours = {
-        raw: operatingHoursOpen && operatingHoursClose
-          ? `${operatingHoursOpen} - ${operatingHoursClose}`
-          : existing,
-      }
+    if (operatingHours !== undefined) {
+      updateData.operatingHours = { raw: operatingHours }
     }
 
     await prisma.seller.update({ where: { id: seller.id }, data: updateData })

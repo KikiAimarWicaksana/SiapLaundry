@@ -205,21 +205,27 @@ export default function LaundryDetailPage() {
                   </span>
                 </div>
               </div>
-              <p className="font-body text-[14px] font-[420] leading-[1.6] text-shade-60 mt-2">{laundry.address}</p>
+              <p className="font-body text-[14px] font-[420] leading-[1.6] text-shade-60 mt-2 whitespace-pre-line">{laundry.address}</p>
             </div>
 
             {/* Operating Hours */}
             {Object.keys(laundry.operatingHours).length > 0 && (
               <div className="bg-canvas-light rounded-lg border border-hairline-light p-4 min-w-[220px]">
                 <h3 className="font-body text-[14px] font-[550] text-ink mb-2">Jam Operasional</h3>
-                <ul className="space-y-1">
-                  {Object.entries(laundry.operatingHours).map(([day, hours]) => (
-                    <li key={day} className="flex justify-between font-body text-[12px] font-[420] text-shade-60">
-                      <span className="capitalize">{DAY_LABELS[day] ?? day}</span>
-                      <span>{hours as string}</span>
-                    </li>
-                  ))}
-                </ul>
+                {laundry.operatingHours.raw ? (
+                  <p className="font-body text-[12px] font-[420] text-shade-60 whitespace-pre-line">
+                    {laundry.operatingHours.raw}
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {Object.entries(laundry.operatingHours).map(([day, hours]) => (
+                      <li key={day} className="flex justify-between font-body text-[12px] font-[420] text-shade-60">
+                        <span className="capitalize">{DAY_LABELS[day] ?? day}</span>
+                        <span>{hours as string}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
           </div>

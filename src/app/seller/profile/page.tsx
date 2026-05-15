@@ -248,12 +248,21 @@ export default function SellerProfilePage() {
             placeholder="081234567890"
           />
 
-          <Input
-            label="Jam Operasional"
-            value={operatingHours}
-            onChange={(e) => setOperatingHours(e.target.value)}
-            placeholder="Contoh: 08:00 - 20:00"
-          />
+          <div className="flex flex-col gap-[4px]">
+            <label className="text-[14px] font-[500] leading-[1.49] tracking-[0.28px] text-ink">
+              Jam Operasional
+            </label>
+            <textarea
+              value={operatingHours}
+              onChange={(e) => setOperatingHours(e.target.value)}
+              rows={3}
+              placeholder="Contoh:
+Senin - Jumat: 08:00 - 20:00
+Sabtu: 09:00 - 18:00
+Minggu: Tutup"
+              className="bg-canvas-light text-ink font-body text-[16px] font-[420] leading-[1.5] px-[12px] py-[10px] rounded-md border border-hairline-light outline-none focus:ring-2 focus:ring-ink/20 focus:border-ink resize-none transition-colors"
+            />
+          </div>
 
           {/* Status buka/tutup */}
           <div className="flex items-center justify-between p-3 bg-canvas-cream rounded-lg border border-hairline-light">
