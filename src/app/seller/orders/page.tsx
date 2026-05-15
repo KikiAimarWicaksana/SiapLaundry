@@ -174,7 +174,7 @@ export default function SellerOrdersPage() {
       <div className="flex flex-col gap-4">
         {loading ? (
           [...Array(3)].map((_, i) => (
-            <Card key={i} variant="default" className="animate-pulse h-20" />
+            <Card key={i} variant="default" className="animate-pulse h-20"><div /></Card>
           ))
         ) : filteredOrders.length === 0 ? (
           <Card variant="default" className="text-center py-12">

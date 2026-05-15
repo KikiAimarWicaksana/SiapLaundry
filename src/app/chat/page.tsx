@@ -18,7 +18,7 @@ interface EnrichedContact extends ChatContact {
   completedAt: string | null;
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
   const [activeContactId, setActiveContactId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [contacts, setContacts] = useState<EnrichedContact[]>([]);
@@ -138,6 +138,18 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <React.Suspense fallback={
+      <div className="flex h-screen items-center justify-center bg-canvas-cream">
+        <p className="text-shade-40">Memuat chat...</p>
+      </div>
+    }>
+      <ChatPageContent />
+    </React.Suspense>
   );
 }
 

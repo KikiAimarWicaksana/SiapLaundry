@@ -91,7 +91,7 @@ export default function DriverOrdersPage() {
       <div className="flex flex-col gap-4">
         {loading ? (
           [...Array(2)].map((_, i) => (
-            <Card key={i} variant="default" className="animate-pulse h-32" />
+            <Card key={i} variant="default" className="animate-pulse h-32"><div /></Card>
           ))
         ) : orders.length === 0 ? (
           <div className="text-center py-12">

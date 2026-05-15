@@ -229,7 +229,7 @@ export default function DriverDashboardPage() {
       {/* Widget Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {loading ? (
-          [...Array(3)].map((_, i) => <Card key={i} variant="default" className="animate-pulse h-28" />)
+          [...Array(3)].map((_, i) => <Card key={i} variant="default" className="animate-pulse h-28"><div /></Card>)
         ) : (
           <>
             <Card variant="default" className="flex flex-col gap-3">

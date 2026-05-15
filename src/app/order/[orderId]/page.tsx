@@ -365,7 +365,7 @@ export default function OrderDetailPage() {
   }
 
   const timelineEvents: TimelineEvent[] = order.statusHistory.map((h) => ({
-    status: h.status,
+    status: h.status as OrderStatus,
     label: STATUS_LABELS[h.status] ?? h.status,
     timestamp: h.createdAt ? formatTimestamp(h.createdAt) : null,
   }));

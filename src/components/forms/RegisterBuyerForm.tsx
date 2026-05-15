@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { LocationPicker } from "@/components/map/LocationPicker";
 import type { PickedLocation } from "@/components/map/LocationPicker";
 import { useAuthStore } from "@/stores/authStore";
+import { motion } from "framer-motion";
 
 const buyerSchema = z
   .object({
@@ -86,7 +87,6 @@ export function RegisterBuyerForm() {
         latitude: data.latitude,
         longitude: data.longitude,
       });
-      // Simpan user ke Zustand agar Navbar langsung update
       const payload = res.data.data ?? res.data;
       if (payload?.user) {
         setUser(payload.user);
@@ -107,12 +107,14 @@ export function RegisterBuyerForm() {
   };
 
   return (
-    <form
+    <motion.form
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
       onSubmit={handleSubmit(onSubmit)}
       className="flex flex-col gap-xl w-full"
       noValidate
     >
-      {/* Nama Lengkap */}
       <Input
         label="Nama Lengkap"
         placeholder="Masukkan nama lengkap"
@@ -120,7 +122,6 @@ export function RegisterBuyerForm() {
         {...register("name")}
       />
 
-      {/* Email */}
       <Input
         label="Email"
         type="email"
@@ -129,7 +130,6 @@ export function RegisterBuyerForm() {
         {...register("email")}
       />
 
-      {/* No. Telepon */}
       <Input
         label="No. Telepon"
         type="tel"
@@ -138,7 +138,6 @@ export function RegisterBuyerForm() {
         {...register("phone")}
       />
 
-      {/* Password */}
       <div className="flex flex-col gap-[4px]">
         <label
           htmlFor="buyer-password"
@@ -184,7 +183,6 @@ export function RegisterBuyerForm() {
         )}
       </div>
 
-      {/* Konfirmasi Password */}
       <div className="flex flex-col gap-[4px]">
         <label
           htmlFor="buyer-confirm-password"
@@ -230,9 +228,8 @@ export function RegisterBuyerForm() {
         )}
       </div>
 
-      {/* Alamat + LocationPicker */}
-      <div className="flex flex-col gap-[4px]">
-        <label className="text-[14px] font-[500] leading-[1.49] tracking-[0.28px] text-ink [font-feature-settings:'ss03']">
+      <div className="flex flex-col gap-[4px] p-4 bg-canvas-cream border border-hairline-light rounded-xl shadow-sm">
+        <label className="text-[14px] font-[500] leading-[1.49] tracking-[0.28px] text-ink [font-feature-settings:'ss03'] mb-1">
           Alamat Rumah
         </label>
         <LocationPicker
@@ -246,7 +243,6 @@ export function RegisterBuyerForm() {
         )}
       </div>
 
-      {/* API Error */}
       {apiError && (
         <div
           className="bg-red-500/10 border border-red-500/30 rounded-md px-4 py-3 text-[14px] text-red-600 [font-feature-settings:'ss03']"
@@ -256,22 +252,20 @@ export function RegisterBuyerForm() {
         </div>
       )}
 
-      {/* Submit */}
       <Button
         variant="primary"
         size="lg"
         type="submit"
         loading={isSubmitting}
         disabled={isSubmitting}
-        className="w-full mt-sm"
+        className="w-full mt-sm shadow-md hover:shadow-lg transition-shadow"
       >
         Daftar sebagai Customer
       </Button>
-    </form>
+    </motion.form>
   );
 }
 
-/* ===== Eye Icon ===== */
 function EyeIcon({ open }: { open: boolean }) {
   if (open) {
     return (

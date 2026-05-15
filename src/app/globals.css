@@ -71,30 +71,7 @@ body {
 /* ===== Neue Haas Grotesk Display Font Face ===== */
 /* Note: Neue Haas Grotesk Display is a proprietary font.
    Include the font files in /public/fonts/ when available.
-   Fallback: Inter Display or Helvetica at light weight. */
-@font-face {
-  font-family: "NeueHaasGrotesk Display";
-  src: url("/fonts/NeueHaasGroteskDisplay-Light.woff2") format("woff2");
-  font-weight: 330;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "NeueHaasGrotesk Display";
-  src: url("/fonts/NeueHaasGroteskDisplay-Regular.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "NeueHaasGrotesk Display";
-  src: url("/fonts/NeueHaasGroteskDisplay-Medium.woff2") format("woff2");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
+   Fallback: Helvetica at light weight is used automatically. */
 
 /* ===== Animations ===== */
 @keyframes slideIn {

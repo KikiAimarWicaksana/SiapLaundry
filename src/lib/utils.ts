@@ -36,6 +36,9 @@ export function formatOrderNumber(date: Date, seq: number): string {
  */
 export function getStatusLabel(status: OrderStatus): string {
   const labels: Record<OrderStatus, string> = {
+    pending_confirmation: "Menunggu Konfirmasi",
+    confirmed: "Pesanan Dikonfirmasi",
+    payment_pending: "Menunggu Pembayaran",
     pending_pickup: 'Menunggu Penjemputan',
     driver_on_way_pickup: 'Kurir Menuju Lokasi',
     picked_up: 'Pakaian Dijemput',
@@ -55,6 +58,9 @@ export function getStatusLabel(status: OrderStatus): string {
  */
 export function getStatusColor(status: OrderStatus): string {
   const colors: Record<OrderStatus, string> = {
+    pending_confirmation: "bg-orange-100 text-orange-800",
+    confirmed: "bg-blue-100 text-blue-800",
+    payment_pending: "bg-yellow-100 text-yellow-800",
     pending_pickup: 'bg-yellow-100 text-yellow-800',
     driver_on_way_pickup: 'bg-blue-100 text-blue-800',
     picked_up: 'bg-blue-100 text-blue-800',

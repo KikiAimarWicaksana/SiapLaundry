@@ -2,6 +2,7 @@
 
 import { Avatar } from "@/components/ui/Avatar";
 import { StarRating } from "@/components/ui/StarRating";
+import { motion } from "framer-motion";
 
 const testimonials = [
   {
@@ -34,23 +35,46 @@ const testimonials = [
   },
 ];
 
+const containerVariants: any = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.15,
+    },
+  },
+};
+
+const itemVariants: any = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.5, ease: "easeOut" } },
+};
+
 export function TestimonialsSection() {
   return (
     <section className="bg-canvas-light py-16 md:py-[128px]">
       <div className="mx-auto max-w-[1440px] px-6 md:px-12 lg:px-16">
-        <h2 className="mb-12 font-display text-[36px] font-[330] leading-[1.16] text-ink md:mb-16 md:text-[55px] [font-feature-settings:'ss03']">
+        <motion.h2 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.6 }}
+          className="mb-12 font-display text-[36px] font-[330] leading-[1.16] text-ink md:mb-16 md:text-[55px] [font-feature-settings:'ss03']"
+        >
           Apa Kata Mereka
-        </h2>
+        </motion.h2>
 
-        <div
-          className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory"
-          role="region"
-          aria-label="Testimoni pelanggan"
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4"
         >
           {testimonials.map((testimonial) => (
-            <article
+            <motion.article
               key={testimonial.id}
-              className="min-w-[300px] max-w-[360px] shrink-0 snap-start rounded-lg bg-canvas-cream border border-hairline-light p-[32px] flex flex-col gap-4"
+              variants={itemVariants}
+              className="rounded-lg bg-canvas-cream border border-hairline-light p-[32px] flex flex-col gap-4 shadow-sm hover:shadow-md transition-shadow h-full"
             >
               <div className="flex items-center gap-3">
                 <Avatar name={testimonial.name} size="md" />
@@ -64,9 +88,9 @@ export function TestimonialsSection() {
               <p className="font-body text-[16px] font-[420] leading-[1.5] text-shade-60 [font-feature-settings:'ss03']">
                 &ldquo;{testimonial.comment}&rdquo;
               </p>
-            </article>
+            </motion.article>
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   );

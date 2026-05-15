@@ -14,6 +14,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { LocationPicker } from "@/components/map/LocationPicker";
 import type { PickedLocation } from "@/components/map/LocationPicker";
 import api from "@/lib/api";
+import { motion } from "framer-motion";
 
 // --- Zod Schemas ---
 const editProfileSchema = z.object({
@@ -267,35 +268,45 @@ export default function ProfilePage() {
       <Navbar variant="light" />
 
       <main className="max-w-[1280px] mx-auto px-xl py-xxl">
-        <h1 className="font-display text-[28px] font-[500] leading-[1.3] tracking-[0.3px] text-ink mb-8 [font-feature-settings:'ss03']">
+        <motion.h1 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="font-display text-[28px] font-[500] leading-[1.3] tracking-[0.3px] text-ink mb-8 [font-feature-settings:'ss03']"
+        >
           Profil Saya
-        </h1>
+        </motion.h1>
 
         {/* Profile Header */}
-        <Card variant="default" className="mb-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <Avatar src={profileData.profilePhoto} name={profileData.name} size="lg" />
-            <div className="flex-1">
-              <h2 className="font-display text-[20px] font-[500] leading-[1.4] text-ink [font-feature-settings:'ss03']">
-                {profileData.name}
-              </h2>
-              <p className="text-[14px] text-shade-50 font-body leading-[1.5] [font-feature-settings:'ss03']">
-                {profileData.email}
-              </p>
-              <p className="text-[14px] text-shade-50 font-body leading-[1.5] [font-feature-settings:'ss03']">
-                {profileData.phone}
-              </p>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <Card variant="default" className="mb-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <Avatar src={profileData.profilePhoto} name={profileData.name} size="lg" />
+              <div className="flex-1">
+                <h2 className="font-display text-[20px] font-[500] leading-[1.4] text-ink [font-feature-settings:'ss03']">
+                  {profileData.name}
+                </h2>
+                <p className="text-[14px] text-shade-50 font-body leading-[1.5] [font-feature-settings:'ss03']">
+                  {profileData.email}
+                </p>
+                <p className="text-[14px] text-shade-50 font-body leading-[1.5] [font-feature-settings:'ss03']">
+                  {profileData.phone}
+                </p>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button variant="outline-light" size="sm" onClick={handleEditProfile}>
+                  Edit Profil
+                </Button>
+                <Button variant="outline-light" size="sm" onClick={handleChangePassword}>
+                  Ubah Password
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline-light" size="sm" onClick={handleEditProfile}>
-                Edit Profil
-              </Button>
-              <Button variant="outline-light" size="sm" onClick={handleChangePassword}>
-                Ubah Password
-              </Button>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </motion.div>
 
         {/* Saved Addresses */}
         <div className="mb-6">
@@ -315,67 +326,81 @@ export default function ProfilePage() {
               ))}
             </div>
           ) : addresses.length === 0 ? (
-            <Card variant="default">
-              <p className="text-shade-50 text-center py-4 font-body text-[14px] [font-feature-settings:'ss03']">
-                Belum ada alamat tersimpan. Tambahkan alamat pertama Anda.
-              </p>
-            </Card>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <Card variant="default">
+                <p className="text-shade-50 text-center py-4 font-body text-[14px] [font-feature-settings:'ss03']">
+                  Belum ada alamat tersimpan. Tambahkan alamat pertama Anda.
+                </p>
+              </Card>
+            </motion.div>
           ) : (
             <div className="flex flex-col gap-3">
-              {addresses.map((addr) => (
-                <Card key={addr.id} variant="default" className="!p-4">
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-body text-[14px] font-[550] text-ink [font-feature-settings:'ss03']">
-                          {addr.label}
-                        </span>
-                        {addr.is_default && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-pill bg-aloe-10 text-ink text-[11px] font-[500] [font-feature-settings:'ss03']">
-                            Default
+              {addresses.map((addr, index) => (
+                <motion.div 
+                  key={addr.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <Card variant="default" className="!p-4 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-body text-[14px] font-[550] text-ink [font-feature-settings:'ss03']">
+                            {addr.label}
                           </span>
+                          {addr.is_default && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-pill bg-aloe-10 text-ink text-[11px] font-[500] [font-feature-settings:'ss03']">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[14px] text-shade-60 font-body leading-[1.5] [font-feature-settings:'ss03']">
+                          {addr.address_line}
+                        </p>
+                        {addr.notes && (
+                          <p className="text-[12px] text-shade-40 font-body mt-1 [font-feature-settings:'ss03']">
+                            Catatan: {addr.notes}
+                          </p>
+                        )}
+                        {addr.latitude !== 0 && (
+                          <p className="text-[11px] text-shade-40 mt-0.5">
+                            📍 {addr.latitude.toFixed(5)}, {addr.longitude.toFixed(5)}
+                          </p>
                         )}
                       </div>
-                      <p className="text-[14px] text-shade-60 font-body leading-[1.5] [font-feature-settings:'ss03']">
-                        {addr.address_line}
-                      </p>
-                      {addr.notes && (
-                        <p className="text-[12px] text-shade-40 font-body mt-1 [font-feature-settings:'ss03']">
-                          Catatan: {addr.notes}
-                        </p>
-                      )}
-                      {addr.latitude !== 0 && (
-                        <p className="text-[11px] text-shade-40 mt-0.5">
-                          📍 {addr.latitude.toFixed(5)}, {addr.longitude.toFixed(5)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-2 flex-wrap shrink-0">
-                      {!addr.is_default && (
-                        <Button variant="outline-light" size="sm" onClick={() => handleSetDefault(addr.id)}>
-                          Set Default
+                      <div className="flex gap-2 flex-wrap shrink-0">
+                        {!addr.is_default && (
+                          <Button variant="outline-light" size="sm" onClick={() => handleSetDefault(addr.id)}>
+                            Set Default
+                          </Button>
+                        )}
+                        <Button variant="outline-light" size="sm" onClick={() => handleEditAddress(addr)}>
+                          Edit
                         </Button>
-                      )}
-                      <Button variant="outline-light" size="sm" onClick={() => handleEditAddress(addr)}>
-                        Edit
-                      </Button>
-                      <Button variant="outline-light" size="sm" onClick={() => handleDeleteAddress(addr.id)}>
-                        Hapus
-                      </Button>
+                        <Button variant="outline-light" size="sm" onClick={() => handleDeleteAddress(addr.id)}>
+                          Hapus
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
+                </motion.div>
               ))}
             </div>
           )}
         </div>
 
         {/* Logout */}
-        <div className="mt-8">
+        <motion.div 
+          initial={{ opacity: 0 }} 
+          animate={{ opacity: 1 }} 
+          transition={{ delay: 0.3 }}
+          className="mt-8"
+        >
           <Button variant="outline-light" size="md" onClick={handleLogout}>
             Logout
           </Button>
-        </div>
+        </motion.div>
       </main>
 
       {/* Edit Profile Modal */}

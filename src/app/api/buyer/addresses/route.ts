@@ -31,7 +31,7 @@ export async function GET() {
     const buyer = await prisma.buyer.findUnique({ where: { userId: authUser.userId } })
     if (!buyer) return unauthorized('Buyer tidak ditemukan')
 
-    let addresses = (buyer.addresses as AddressEntry[]) ?? []
+    let addresses = (buyer.addresses as unknown as AddressEntry[]) ?? []
 
     // Pastikan setiap alamat punya id — migrasi data lama yang tidak punya id
     let needsMigration = false
@@ -46,7 +46,7 @@ export async function GET() {
     if (needsMigration) {
       await prisma.buyer.update({
         where: { userId: authUser.userId },
-        data: { addresses },
+        data: { addresses: addresses as any },
       })
     }
 
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     const parsed = addressSchema.safeParse(body)
     if (!parsed.success) return badRequest('Data tidak valid')
 
-    const existing = (buyer.addresses as AddressEntry[]) ?? []
+    const existing = (buyer.addresses as unknown as AddressEntry[]) ?? []
     const newAddr: AddressEntry = {
       id: `addr-${Date.now()}`,
       label: parsed.data.label,
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     await prisma.buyer.update({
       where: { userId: authUser.userId },
-      data: { addresses: updated },
+      data: { addresses: updated as any },
     })
 
     return ok(newAddr)
@@ -114,7 +114,7 @@ export async function PUT(request: NextRequest) {
     const parsed = addressSchema.partial().safeParse(data)
     if (!parsed.success) return badRequest('Data tidak valid')
 
-    let addresses = (buyer.addresses as AddressEntry[]) ?? []
+    let addresses = (buyer.addresses as unknown as AddressEntry[]) ?? []
 
     // Jika set default, reset yang lain
     if (parsed.data.is_default) {
@@ -127,7 +127,7 @@ export async function PUT(request: NextRequest) {
 
     await prisma.buyer.update({
       where: { userId: authUser.userId },
-      data: { addresses },
+      data: { addresses: addresses as any },
     })
 
     return ok(addresses.find((a) => a.id === id))
@@ -149,7 +149,7 @@ export async function DELETE(request: NextRequest) {
     const id = searchParams.get('id')
     if (!id) return badRequest('ID alamat wajib diisi')
 
-    let addresses = (buyer.addresses as AddressEntry[]) ?? []
+    let addresses = (buyer.addresses as unknown as AddressEntry[]) ?? []
     addresses = addresses.filter((a) => a.id !== id)
 
     // Jika yang dihapus adalah default, set yang pertama sebagai default
@@ -159,7 +159,7 @@ export async function DELETE(request: NextRequest) {
 
     await prisma.buyer.update({
       where: { userId: authUser.userId },
-      data: { addresses },
+      data: { addresses: addresses as any },
     })
 
     return NextResponse.json({ success: true })

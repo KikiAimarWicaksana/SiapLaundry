@@ -1,4 +1,7 @@
+"use client";
+
 import { Card } from "@/components/ui/Card";
+import { motion } from "framer-motion";
 
 const features = [
   {
@@ -46,27 +49,55 @@ const features = [
   },
 ];
 
+const containerVariants: any = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.15,
+    },
+  },
+};
+
+const itemVariants: any = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: "easeOut" } },
+};
+
 export function FeaturesSection() {
   return (
     <section className="bg-canvas-cream py-16 md:py-[128px]">
       <div className="mx-auto max-w-[1440px] px-6 md:px-12 lg:px-16">
-        <h2 className="mb-12 font-display text-[36px] font-[330] leading-[1.16] text-ink md:mb-16 md:text-[55px] [font-feature-settings:'ss03']">
+        <motion.h2 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.6 }}
+          className="mb-12 font-display text-[36px] font-[330] leading-[1.16] text-ink md:mb-16 md:text-[55px] [font-feature-settings:'ss03']"
+        >
           Fitur Unggulan
-        </h2>
+        </motion.h2>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <motion.div 
+          variants={containerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          className="grid grid-cols-1 gap-6 sm:grid-cols-2"
+        >
           {features.map((feature) => (
-            <Card key={feature.title} variant="default" className="flex flex-col gap-4">
-              <div className="text-ink">{feature.icon}</div>
-              <h3 className="font-display text-[20px] font-[500] leading-[1.4] tracking-[0.3px] text-ink [font-feature-settings:'ss03']">
-                {feature.title}
-              </h3>
-              <p className="font-body text-[16px] font-[420] leading-[1.5] text-shade-50 [font-feature-settings:'ss03']">
-                {feature.description}
-              </p>
-            </Card>
+            <motion.div key={feature.title} variants={itemVariants}>
+              <Card variant="default" className="flex flex-col gap-4 h-full shadow-sm hover:shadow-md transition-shadow">
+                <div className="text-ink">{feature.icon}</div>
+                <h3 className="font-display text-[20px] font-[500] leading-[1.4] tracking-[0.3px] text-ink [font-feature-settings:'ss03']">
+                  {feature.title}
+                </h3>
+                <p className="font-body text-[16px] font-[420] leading-[1.5] text-shade-50 [font-feature-settings:'ss03']">
+                  {feature.description}
+                </p>
+              </Card>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   );
