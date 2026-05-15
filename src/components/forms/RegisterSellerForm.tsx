@@ -331,5 +331,3 @@ function EyeIcon({ open }: { open: boolean }) {
     </svg>
   );
 }
-
-export default RegisterSellerForm;

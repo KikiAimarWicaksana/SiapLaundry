@@ -62,5 +62,3 @@ export function ReviewCard({
     </article>
   );
 }
-
-export default ReviewCard;

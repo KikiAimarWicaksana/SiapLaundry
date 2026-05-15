@@ -316,5 +316,3 @@ function EyeOffIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-
-export default LoginForm;

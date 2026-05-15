@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export function HeroSection() {
   return (
@@ -32,14 +33,20 @@ export function HeroSection() {
             </div>
           </div>
 
-          {/* Right: Placeholder illustration area */}
+          {/* Right: Illustration area */}
           <div className="hidden lg:block">
-            <div className="aspect-square w-full max-w-[560px] rounded-xl bg-shade-30/30" />
+            <div className="relative aspect-square w-full max-w-[640px] overflow-hidden rounded-xl">
+              <Image
+                src="/hero-laundry.png"
+                alt="Modern Laundry Service"
+                fill
+                className="object-cover"
+                priority
+              />
+            </div>
           </div>
         </div>
       </div>
     </section>
   );
 }
-
-export default HeroSection;

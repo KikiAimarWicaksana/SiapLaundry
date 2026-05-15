@@ -176,5 +176,3 @@ export function NearbyLaundriesMap({
     </GoogleMap>
   );
 }
-
-export default NearbyLaundriesMap;

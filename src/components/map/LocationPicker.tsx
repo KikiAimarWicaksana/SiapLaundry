@@ -251,5 +251,3 @@ export function LocationPicker({ initialLocation, onConfirm, onCancel }: Locatio
     </div>
   );
 }
-
-export default LocationPicker;

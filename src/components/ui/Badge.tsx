@@ -83,5 +83,3 @@ export function OrderStatusBadge({ status, className = "" }: OrderStatusBadgePro
     </span>
   );
 }
-
-export default Badge;

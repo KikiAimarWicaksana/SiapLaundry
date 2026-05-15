@@ -61,5 +61,3 @@ export function Card({
     </Component>
   );
 }
-
-export default Card;

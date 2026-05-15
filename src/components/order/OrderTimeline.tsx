@@ -147,5 +147,3 @@ export function OrderTimeline({ events, currentStatus }: OrderTimelineProps) {
     </ol>
   );
 }
-
-export default OrderTimeline;

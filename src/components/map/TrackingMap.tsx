@@ -186,5 +186,3 @@ export function TrackingMap({
     </GoogleMap>
   );
 }
-
-export default TrackingMap;

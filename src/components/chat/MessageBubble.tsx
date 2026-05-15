@@ -57,5 +57,3 @@ export function MessageBubble({ message, isSent }: MessageBubbleProps) {
     </div>
   );
 }
-
-export default MessageBubble;

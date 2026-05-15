@@ -24,5 +24,3 @@ export function LaundryGrid({ laundries }: LaundryGridProps) {
     </div>
   );
 }
-
-export default LaundryGrid;

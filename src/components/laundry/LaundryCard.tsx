@@ -118,5 +118,3 @@ export function LaundryCard({
     </article>
   );
 }
-
-export default LaundryCard;

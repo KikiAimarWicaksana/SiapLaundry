@@ -243,5 +243,3 @@ function FooterLight() {
     </footer>
   );
 }
-
-export default Footer;

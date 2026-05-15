@@ -35,5 +35,3 @@ export function PillTag({
     </span>
   );
 }
-
-export default PillTag;

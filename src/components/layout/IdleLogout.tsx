@@ -192,5 +192,3 @@ export function IdleLogout() {
 
   return <SessionExpiredModal onClose={handleClose} />;
 }
-
-export default IdleLogout;

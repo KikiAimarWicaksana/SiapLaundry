@@ -40,5 +40,3 @@ export function Skeleton({
     </div>
   );
 }
-
-export default Skeleton;

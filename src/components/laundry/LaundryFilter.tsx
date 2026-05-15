@@ -289,5 +289,3 @@ export function LaundryFilter({
     </aside>
   );
 }
-
-export default LaundryFilter;

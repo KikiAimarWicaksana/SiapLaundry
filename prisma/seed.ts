@@ -16,7 +16,7 @@ async function main() {
   console.log('🌱 Starting seed...')
 
   // Clear existing data (order matters karena FK)
-  await prisma.chat.deleteMany()
+  await prisma.chatMessage.deleteMany()
   await prisma.notification.deleteMany()
   await prisma.review.deleteMany()
   await prisma.orderStatusHistory.deleteMany()

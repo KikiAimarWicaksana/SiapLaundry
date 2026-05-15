@@ -24,13 +24,7 @@ function WhatsAppIcon() {
   );
 }
 
-function ClockIcon() {
-  return (
-    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
+
 
 const contacts = [
   {
@@ -54,13 +48,7 @@ const contacts = [
     href: "https://wa.me/6281234567890",
     description: "Respon cepat via chat",
   },
-  {
-    icon: <ClockIcon />,
-    label: "Jam Operasional",
-    value: "Senin – Sabtu",
-    href: null,
-    description: "08:00 – 20:00 WIB",
-  },
+
 ];
 
 export function ContactSection() {
@@ -81,7 +69,7 @@ export function ContactSection() {
         </div>
 
         {/* Contact Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-lg mb-[48px]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-lg mb-[48px]">
           {contacts.map((contact, i) => (
             <div
               key={i}
@@ -186,5 +174,3 @@ export function ContactSection() {
     </section>
   );
 }
-
-export default ContactSection;

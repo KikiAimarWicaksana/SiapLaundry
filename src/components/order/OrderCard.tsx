@@ -263,5 +263,3 @@ export function OrderCard({ order }: OrderCardProps) {
     </article>
   );
 }
-
-export default OrderCard;

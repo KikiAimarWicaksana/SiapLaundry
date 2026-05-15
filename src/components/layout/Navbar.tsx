@@ -362,5 +362,3 @@ function NavbarLight({ mobileMenuOpen, setMobileMenuOpen }: NavbarInternalProps)
     </nav>
   );
 }
-
-export default Navbar;

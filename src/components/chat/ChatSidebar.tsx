@@ -100,5 +100,3 @@ export function ChatSidebar({
     </aside>
   );
 }
-
-export default ChatSidebar;

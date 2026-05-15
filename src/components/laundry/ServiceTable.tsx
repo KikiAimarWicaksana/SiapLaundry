@@ -80,5 +80,3 @@ export function ServiceTable({
     </div>
   );
 }
-
-export default ServiceTable;

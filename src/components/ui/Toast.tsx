@@ -142,5 +142,3 @@ function ToastMessage({
     </div>
   );
 }
-
-export default ToastProvider;

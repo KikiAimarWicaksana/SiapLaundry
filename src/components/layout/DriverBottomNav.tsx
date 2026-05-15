@@ -330,5 +330,3 @@ export function DriverBottomNav() {
     </>
   );
 }
-
-export default DriverBottomNav;

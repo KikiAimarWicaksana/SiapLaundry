@@ -267,5 +267,3 @@ export function SellerSidebar() {
     </aside>
   );
 }
-
-export default SellerSidebar;
