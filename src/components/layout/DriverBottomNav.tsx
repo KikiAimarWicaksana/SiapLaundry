@@ -96,6 +96,14 @@ function ProfileIcon({ className }: { className?: string }) {
   );
 }
 
+function ChatNavIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 function LogoutIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -129,6 +137,11 @@ const navItems: NavItem[] = [
     icon: <OrdersIcon />,
   },
   {
+    href: "/chat",
+    label: "Chat",
+    icon: <ChatNavIcon />,
+  },
+  {
     href: "/driver/map",
     label: "Map",
     icon: <MapPinIcon />,
@@ -143,6 +156,32 @@ const navItems: NavItem[] = [
 export function DriverBottomNav() {
   const pathname = usePathname();
   const logout = useAuthStore((state) => state.logout);
+  const [orderCount, setOrderCount] = React.useState(0);
+  const [unreadChatCount, setUnreadChatCount] = React.useState(0);
+
+  React.useEffect(() => {
+    async function fetchCounts() {
+      try {
+        const { default: api } = await import('@/lib/api');
+        const [ordersRes, notifsRes] = await Promise.all([
+          api.get('/driver/orders'),
+          api.get('/notifications'),
+        ]);
+        
+        const { pickup = [], delivery = [] } = ordersRes.data.data ?? {};
+        setOrderCount(pickup.length + delivery.length);
+
+        const notifs = notifsRes.data.data ?? [];
+        const chatCount = notifs.filter((n: { type: string; isRead: boolean }) => n.type === 'chat' && !n.isRead).length;
+        setUnreadChatCount(chatCount);
+      } catch {
+        // silent
+      }
+    }
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const isActive = (href: string) => {
     if (href === "/driver/dashboard") {
@@ -191,6 +230,16 @@ export function DriverBottomNav() {
                   >
                     <span className="flex-shrink-0">{item.icon}</span>
                     <span className="flex-1">{item.label}</span>
+                    {item.label === "Orders" && orderCount > 0 && (
+                      <span className="min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-red-500 text-canvas-light text-[11px] font-[500] leading-none px-1">
+                        {orderCount > 99 ? "99+" : orderCount}
+                      </span>
+                    )}
+                    {item.label === "Chat" && unreadChatCount > 0 && (
+                      <span className="min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-red-500 text-canvas-light text-[11px] font-[500] leading-none px-1">
+                        {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
@@ -245,6 +294,16 @@ export function DriverBottomNav() {
                     `}
                   >
                     {item.icon}
+                    {item.label === "Orders" && orderCount > 0 && (
+                      <span className="absolute -top-[4px] -right-[4px] min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-red-500 text-canvas-light text-[9px] font-[600] leading-none px-1">
+                        {orderCount > 99 ? "99+" : orderCount}
+                      </span>
+                    )}
+                    {item.label === "Chat" && unreadChatCount > 0 && (
+                      <span className="absolute -top-[4px] -right-[4px] min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-red-500 text-canvas-light text-[9px] font-[600] leading-none px-1">
+                        {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                      </span>
+                    )}
                   </span>
                   <span>{item.label}</span>
                 </Link>

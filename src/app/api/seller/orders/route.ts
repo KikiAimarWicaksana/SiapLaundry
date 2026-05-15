@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
         pickupAddress: o.pickupAddress,
         buyerNotes: o.buyerNotes,
         createdAt: o.createdAt.toISOString(),
+        completedAt: o.completedAt?.toISOString() || null,
       })),
     })
   } catch (err) {

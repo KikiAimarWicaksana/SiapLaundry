@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const deliveryOrders = await prisma.order.findMany({
       where: {
         deliveryDriverId: driver.id,
-        status: { in: ['ready_for_delivery', 'driver_on_way_delivery', 'delivered'] },
+        status: { in: ['ready_for_delivery', 'driver_on_way_delivery', 'delivered', 'completed'] },
       },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
       status: o.status,
       pickupDate: o.pickupDate.toISOString().split('T')[0],
       pickupTimeSlot: o.pickupTimeSlot,
+      completedAt: o.completedAt?.toISOString() || null,
     })
 
     if (type === 'pickup') {

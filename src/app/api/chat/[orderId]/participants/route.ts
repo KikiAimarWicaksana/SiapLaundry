@@ -37,17 +37,35 @@ export async function GET(
 
     if (!order) return notFound('Order tidak ditemukan')
 
-    const participants = [
+    const participants: { role: string; userId: number; name: string }[] = [
       { role: 'buyer', userId: order.buyer.user.id, name: order.buyer.user.name },
       { role: 'seller', userId: order.seller.user.id, name: order.seller.user.name },
     ]
 
-    if (order.pickupDriver) {
-      participants.push({
-        role: 'driver',
-        userId: order.pickupDriver.user.id,
-        name: `${order.pickupDriver.user.name} (Kurir)`,
-      })
+    const addDriver = (driver: any) => {
+      if (driver && !participants.some(p => p.userId === driver.user.id)) {
+        participants.push({
+          role: 'driver',
+          userId: driver.user.id,
+          name: `${driver.user.name} (Kurir)`,
+        })
+      }
+    }
+
+    // Driver hanya muncul jika sudah "Accept" (status berubah dari confirmed/pending_pickup)
+    const pickupActive = [
+      'driver_on_way_pickup', 'picked_up', 'at_laundry', 
+      'payment_pending', 'washing', 'ready_for_delivery'
+    ];
+    const deliveryActive = [
+      'driver_on_way_delivery', 'delivered', 'completed'
+    ];
+
+    if (order.pickupDriver && pickupActive.includes(order.status)) {
+      addDriver(order.pickupDriver);
+    }
+    if (order.deliveryDriver && deliveryActive.includes(order.status)) {
+      addDriver(order.deliveryDriver);
     }
 
     // Filter out current user

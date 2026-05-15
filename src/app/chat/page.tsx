@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatWindow } from "@/components/chat/ChatWindow";
@@ -13,6 +14,8 @@ import type { ChatContact } from "@/types/chat";
 
 interface EnrichedContact extends ChatContact {
   receiverUserId: number;
+  orderStatus: string;
+  completedAt: string | null;
 }
 
 export default function ChatPage() {
@@ -22,128 +25,45 @@ export default function ChatPage() {
 
   const user = useAuthStore((state) => state.user);
   const { setContacts: setStoreContacts } = useChatStore();
+  const searchParams = useSearchParams();
+  const targetOrderId = searchParams.get("order");
 
   useEffect(() => {
     async function fetchContacts() {
       if (!user) { setLoading(false); return; }
       try {
-        const derived: EnrichedContact[] = [];
-        const activeStatuses = [
-          "pending_confirmation","confirmed","pending_pickup",
-          "driver_on_way_pickup","picked_up","at_laundry",
-          "payment_pending","washing","ready_for_delivery",
-          "driver_on_way_delivery",
-        ];
+        const res = await api.get("/chat/contacts");
+        const data = res.data.data ?? [];
+        setContacts(data);
+        setStoreContacts(data);
 
-        if (user.role === "buyer") {
-          const res = await api.get("/buyer/orders");
-          for (const order of res.data.data ?? []) {
-            if (!activeStatuses.includes(order.status)) continue;
-            // Fetch participants untuk order ini
-            try {
-              const pRes = await api.get(`/chat/${order.id}/participants`);
-              const participants: { userId: number; name: string; role: string }[] = pRes.data.data ?? [];
-              const seller = participants.find(p => p.role === "seller");
-              if (seller) {
-                derived.push({
-                  id: `order-${order.id}`,
-                  name: order.seller.laundryName,
-                  role: "seller" as const,
-                  avatar: order.seller.photos?.[0],
-                  isOnline: false,
-                  lastMessage: "",
-                  lastMessageTime: "",
-                  unreadCount: 0,
-                  orderId: String(order.id),
-                  receiverUserId: seller.userId,
-                });
-              }
-              const driver = participants.find(p => p.role === "driver");
-              if (driver) {
-                derived.push({
-                  id: `order-driver-${order.id}`,
-                  name: `${driver.name} (Kurir)`,
-                  role: "driver" as const,
-                  avatar: undefined,
-                  isOnline: false,
-                  lastMessage: "",
-                  lastMessageTime: "",
-                  unreadCount: 0,
-                  orderId: String(order.id),
-                  receiverUserId: driver.userId,
-                });
-              }
-            } catch { /* skip order ini */ }
+        // Auto-select contact jika ada di URL atau default ke yang pertama
+        if (targetOrderId) {
+          const target = data.find((c: any) => c.orderId === targetOrderId);
+          if (target) {
+            setActiveContactId(target.id);
           }
-        } else if (user.role === "seller") {
-          const res = await api.get("/seller/orders");
-          for (const order of res.data.data ?? []) {
-            if (["completed","cancelled"].includes(order.status)) continue;
-            try {
-              const pRes = await api.get(`/chat/${order.id}/participants`);
-              const participants: { userId: number; name: string; role: string }[] = pRes.data.data ?? [];
-              const buyer = participants.find(p => p.role === "buyer");
-              if (buyer) {
-                derived.push({
-                  id: `order-${order.id}`,
-                  name: order.buyerName,
-                  role: "buyer" as const,
-                  avatar: undefined,
-                  isOnline: false,
-                  lastMessage: "",
-                  lastMessageTime: "",
-                  unreadCount: 0,
-                  orderId: String(order.id),
-                  receiverUserId: buyer.userId,
-                });
-              }
-            } catch { /* skip */ }
-          }
-        } else if (user.role === "driver") {
-          const res = await api.get("/driver/orders");
-          const { pickup = [], delivery = [] } = res.data.data ?? {};
-          const seen = new Set<string>();
-          for (const order of [...pickup, ...delivery]) {
-            if (seen.has(order.id)) continue;
-            seen.add(order.id);
-            try {
-              const pRes = await api.get(`/chat/${order.id}/participants`);
-              const participants: { userId: number; name: string; role: string }[] = pRes.data.data ?? [];
-              const buyer = participants.find(p => p.role === "buyer");
-              if (buyer) {
-                derived.push({
-                  id: `order-${order.id}`,
-                  name: order.buyerName,
-                  role: "buyer" as const,
-                  avatar: undefined,
-                  isOnline: false,
-                  lastMessage: "",
-                  lastMessageTime: "",
-                  unreadCount: 0,
-                  orderId: String(order.id),
-                  receiverUserId: buyer.userId,
-                });
-              }
-            } catch { /* skip */ }
-          }
+        } else if (data.length > 0 && !activeContactId) {
+          setActiveContactId(data[0].id);
         }
-
-        setContacts(derived);
-        setStoreContacts(derived);
-      } catch {
+      } catch (err) {
+        console.error("Failed to fetch contacts:", err);
         setContacts([]);
       } finally {
         setLoading(false);
       }
     }
     fetchContacts();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+    // Refresh list setiap 10 detik agar last message terupdate
+    const interval = setInterval(fetchContacts, 10000);
+    return () => clearInterval(interval);
+  }, [user?.id, setStoreContacts]);
 
   const activeContact = contacts.find((c) => c.id === activeContactId);
   const activeOrderId = activeContact?.orderId ?? "";
+  const activeReceiverId = activeContact?.receiverUserId ? String(activeContact.receiverUserId) : undefined;
 
-  const { messages, sendMessage, isConnected, loading: msgLoading } = useChat(activeOrderId);
+  const { messages, sendMessage, isConnected, loading: msgLoading } = useChat(activeOrderId, activeReceiverId);
 
   const handleSelectContact = useCallback((contactId: string) => {
     setActiveContactId(contactId);
@@ -203,6 +123,7 @@ export default function ChatPage() {
                   currentUserId={user?.id ?? ""}
                   contactName={activeContact.name}
                   isOnline={activeContact.isOnline}
+                  notice={getChatNotice(activeContact)}
                 />
               )}
               <ChatInput onSend={handleSendMessage} disabled={false} />
@@ -218,4 +139,11 @@ export default function ChatPage() {
       </div>
     </div>
   );
+}
+
+function getChatNotice(contact: EnrichedContact): string | undefined {
+  if (contact.orderStatus === 'completed') {
+    return "Pesanan telah selesai. Chat tetap terbuka selama 24 jam untuk pengaduan, setelah itu percakapan akan dihapus otomatis.";
+  }
+  return undefined;
 }

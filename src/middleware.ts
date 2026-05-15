@@ -27,7 +27,6 @@ const BUYER_ROUTES = [
   '/laundry',
   '/order',
   '/my-orders',
-  '/chat',
   '/profile',
 ]
 

@@ -34,8 +34,19 @@ export async function GET(
     })
     if (!order) return notFound('Order tidak ditemukan')
 
+    const { searchParams } = new URL(_req.url)
+    const otherId = searchParams.get('receiverId') ? Number(searchParams.get('receiverId')) : null
+
     const messages = await prisma.chatMessage.findMany({
-      where: { orderId: Number(orderId) },
+      where: { 
+        orderId: Number(orderId),
+        ...(otherId ? {
+          OR: [
+            { senderId: authUser.userId, receiverId: otherId },
+            { senderId: otherId, receiverId: authUser.userId },
+          ]
+        } : {})
+      },
       orderBy: { createdAt: 'asc' },
       include: {
         sender: { select: { id: true, name: true, profilePhoto: true } },

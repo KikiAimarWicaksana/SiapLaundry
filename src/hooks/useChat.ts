@@ -13,7 +13,7 @@ export interface UseChatReturn {
   loading: boolean
 }
 
-export function useChat(orderId: string): UseChatReturn {
+export function useChat(orderId: string, receiverId?: string): UseChatReturn {
   const user = useAuthStore((state) => state.user)
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
@@ -24,7 +24,7 @@ export function useChat(orderId: string): UseChatReturn {
   const fetchMessages = useCallback(async () => {
     if (!orderId) return
     try {
-      const res = await api.get(`/chat/${orderId}`)
+      const res = await api.get(`/chat/${orderId}${receiverId ? `?receiverId=${receiverId}` : ''}`)
       const data: Message[] = res.data.data ?? []
       setMessages(data)
       lastCountRef.current = data.length
@@ -32,7 +32,7 @@ export function useChat(orderId: string): UseChatReturn {
     } catch {
       setIsConnected(false)
     }
-  }, [orderId])
+  }, [orderId, receiverId])
 
   // Load messages saat orderId berubah
   useEffect(() => {

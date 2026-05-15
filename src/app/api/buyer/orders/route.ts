@@ -81,6 +81,7 @@ export async function GET() {
         buyerNotes: o.buyerNotes ?? undefined,
         paymentStatus: o.paymentStatus,
         createdAt: o.createdAt.toISOString(),
+        completedAt: o.completedAt?.toISOString() || null,
         statusHistory: o.statusHistory.map((h) => ({
           status: h.status,
           createdAt: h.createdAt.toISOString(),
