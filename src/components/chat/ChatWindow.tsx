@@ -57,7 +57,7 @@ export function ChatWindow({
             <MessageBubble
               key={msg.id}
               message={msg}
-              isSent={msg.senderId === currentUserId}
+              isSent={String(msg.senderId) === String(currentUserId)}
             />
           ))
         )}

@@ -11,99 +11,131 @@ import { useAuthStore } from "@/stores/authStore";
 import api from "@/lib/api";
 import type { ChatContact } from "@/types/chat";
 
+interface EnrichedContact extends ChatContact {
+  receiverUserId: number;
+}
+
 export default function ChatPage() {
   const [activeContactId, setActiveContactId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [contacts, setContacts] = useState<EnrichedContact[]>([]);
 
   const user = useAuthStore((state) => state.user);
-  const contacts = useChatStore((state) => state.contacts);
-  const setContacts = useChatStore((state) => state.setContacts);
+  const { setContacts: setStoreContacts } = useChatStore();
 
-  // Fetch kontak dari order yang dimiliki user
   useEffect(() => {
     async function fetchContacts() {
       if (!user) { setLoading(false); return; }
       try {
-        let derived: ChatContact[] = [];
+        const derived: EnrichedContact[] = [];
+        const activeStatuses = [
+          "pending_confirmation","confirmed","pending_pickup",
+          "driver_on_way_pickup","picked_up","at_laundry",
+          "payment_pending","washing","ready_for_delivery",
+          "driver_on_way_delivery",
+        ];
 
         if (user.role === "buyer") {
           const res = await api.get("/buyer/orders");
-          const orders = res.data.data ?? [];
-          // Buat kontak dari setiap order yang punya seller/driver
-          for (const order of orders) {
-            if (["pending_pickup","driver_on_way_pickup","picked_up","at_laundry","washing","ready_for_delivery","driver_on_way_delivery"].includes(order.status)) {
-              // Kontak seller
-              derived.push({
-                id: `seller-${order.seller.id}-${order.id}`,
-                name: order.seller.laundryName,
-                role: "seller" as const,
-                avatar: order.seller.photos?.[0],
-                isOnline: false,
-                lastMessage: "",
-                lastMessageTime: "",
-                unreadCount: 0,
-                orderId: order.id,
-              });
-              // Kontak driver jika sudah ada
-              if (order.pickupDriver) {
+          for (const order of res.data.data ?? []) {
+            if (!activeStatuses.includes(order.status)) continue;
+            // Fetch participants untuk order ini
+            try {
+              const pRes = await api.get(`/chat/${order.id}/participants`);
+              const participants: { userId: number; name: string; role: string }[] = pRes.data.data ?? [];
+              const seller = participants.find(p => p.role === "seller");
+              if (seller) {
                 derived.push({
-                  id: `driver-${order.pickupDriver.id}-${order.id}`,
-                  name: `${order.pickupDriver.name} (Kurir)`,
+                  id: `order-${order.id}`,
+                  name: order.seller.laundryName,
+                  role: "seller" as const,
+                  avatar: order.seller.photos?.[0],
+                  isOnline: false,
+                  lastMessage: "",
+                  lastMessageTime: "",
+                  unreadCount: 0,
+                  orderId: String(order.id),
+                  receiverUserId: seller.userId,
+                });
+              }
+              const driver = participants.find(p => p.role === "driver");
+              if (driver) {
+                derived.push({
+                  id: `order-driver-${order.id}`,
+                  name: `${driver.name} (Kurir)`,
                   role: "driver" as const,
                   avatar: undefined,
                   isOnline: false,
                   lastMessage: "",
                   lastMessageTime: "",
                   unreadCount: 0,
-                  orderId: order.id,
+                  orderId: String(order.id),
+                  receiverUserId: driver.userId,
                 });
               }
-            }
+            } catch { /* skip order ini */ }
           }
         } else if (user.role === "seller") {
           const res = await api.get("/seller/orders");
-          const orders = res.data.data ?? [];
-          for (const order of orders) {
-            if (!["completed","cancelled"].includes(order.status)) {
-              derived.push({
-                id: `buyer-${order.id}`,
-                name: order.buyerName,
-                role: "buyer" as const,
-                avatar: undefined,
-                isOnline: false,
-                lastMessage: "",
-                lastMessageTime: "",
-                unreadCount: 0,
-                orderId: order.id,
-              });
-            }
+          for (const order of res.data.data ?? []) {
+            if (["completed","cancelled"].includes(order.status)) continue;
+            try {
+              const pRes = await api.get(`/chat/${order.id}/participants`);
+              const participants: { userId: number; name: string; role: string }[] = pRes.data.data ?? [];
+              const buyer = participants.find(p => p.role === "buyer");
+              if (buyer) {
+                derived.push({
+                  id: `order-${order.id}`,
+                  name: order.buyerName,
+                  role: "buyer" as const,
+                  avatar: undefined,
+                  isOnline: false,
+                  lastMessage: "",
+                  lastMessageTime: "",
+                  unreadCount: 0,
+                  orderId: String(order.id),
+                  receiverUserId: buyer.userId,
+                });
+              }
+            } catch { /* skip */ }
           }
         } else if (user.role === "driver") {
           const res = await api.get("/driver/orders");
           const { pickup = [], delivery = [] } = res.data.data ?? {};
+          const seen = new Set<string>();
           for (const order of [...pickup, ...delivery]) {
-            derived.push({
-              id: `buyer-driver-${order.id}`,
-              name: order.buyerName,
-              role: "buyer" as const,
-              avatar: undefined,
-              isOnline: false,
-              lastMessage: "",
-              lastMessageTime: "",
-              unreadCount: 0,
-              orderId: order.id,
-            });
+            if (seen.has(order.id)) continue;
+            seen.add(order.id);
+            try {
+              const pRes = await api.get(`/chat/${order.id}/participants`);
+              const participants: { userId: number; name: string; role: string }[] = pRes.data.data ?? [];
+              const buyer = participants.find(p => p.role === "buyer");
+              if (buyer) {
+                derived.push({
+                  id: `order-${order.id}`,
+                  name: order.buyerName,
+                  role: "buyer" as const,
+                  avatar: undefined,
+                  isOnline: false,
+                  lastMessage: "",
+                  lastMessageTime: "",
+                  unreadCount: 0,
+                  orderId: String(order.id),
+                  receiverUserId: buyer.userId,
+                });
+              }
+            } catch { /* skip */ }
           }
         }
 
         setContacts(derived);
+        setStoreContacts(derived);
       } catch {
         setContacts([]);
       } finally {
         setLoading(false);
       }
     }
-
     fetchContacts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -111,35 +143,24 @@ export default function ChatPage() {
   const activeContact = contacts.find((c) => c.id === activeContactId);
   const activeOrderId = activeContact?.orderId ?? "";
 
-  const { messages, sendMessage, isConnected, markAsRead } = useChat(
-    activeOrderId,
-    activeContactId ?? ""
-  );
+  const { messages, sendMessage, isConnected, loading: msgLoading } = useChat(activeOrderId);
 
-  const handleSelectContact = useCallback(
-    (contactId: string) => {
-      setActiveContactId(contactId);
-      markAsRead();
-    },
-    [markAsRead]
-  );
+  const handleSelectContact = useCallback((contactId: string) => {
+    setActiveContactId(contactId);
+  }, []);
 
-  const handleSendMessage = useCallback(
-    (content: string) => { sendMessage(content); },
-    [sendMessage]
-  );
+  const handleSendMessage = useCallback(async (content: string) => {
+    if (!activeContact) return;
+    await sendMessage(content, String(activeContact.receiverUserId));
+  }, [sendMessage, activeContact]);
 
   return (
     <div className="flex flex-col h-screen bg-canvas-cream">
       <Navbar variant="light" />
 
       {!isConnected && (
-        <div
-          className="bg-red-500 text-canvas-light text-center py-[8px] px-[16px] text-[13px] font-[420]"
-          role="alert"
-          aria-live="polite"
-        >
-          Koneksi terputus, mencoba menghubungkan kembali...
+        <div className="bg-red-500 text-canvas-light text-center py-[8px] px-[16px] text-[13px] font-[420]" role="alert">
+          Koneksi bermasalah...
         </div>
       )}
 
@@ -148,7 +169,7 @@ export default function ChatPage() {
         <div className="w-[240px] md:w-[280px] border-r border-hairline-light bg-canvas-light flex flex-col">
           {loading ? (
             <div className="flex-1 flex items-center justify-center">
-              <p className="text-[13px] text-shade-40">Memuat...</p>
+              <p className="text-[13px] text-shade-40">Memuat kontak...</p>
             </div>
           ) : contacts.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-3">
@@ -172,20 +193,24 @@ export default function ChatPage() {
         <div className="flex-1 flex flex-col min-w-0">
           {activeContact ? (
             <>
-              <ChatWindow
-                messages={messages}
-                currentUserId={user?.id ?? ""}
-                contactName={activeContact.name}
-                isOnline={activeContact.isOnline}
-              />
-              <ChatInput onSend={handleSendMessage} disabled={!isConnected} />
+              {msgLoading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-[13px] text-shade-40">Memuat pesan...</p>
+                </div>
+              ) : (
+                <ChatWindow
+                  messages={messages}
+                  currentUserId={user?.id ?? ""}
+                  contactName={activeContact.name}
+                  isOnline={activeContact.isOnline}
+                />
+              )}
+              <ChatInput onSend={handleSendMessage} disabled={false} />
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center bg-canvas-cream">
               <p className="text-[14px] text-shade-40">
-                {contacts.length > 0
-                  ? "Pilih kontak untuk memulai percakapan"
-                  : "Belum ada percakapan aktif"}
+                {contacts.length > 0 ? "Pilih kontak untuk memulai percakapan" : "Belum ada percakapan aktif"}
               </p>
             </div>
           )}

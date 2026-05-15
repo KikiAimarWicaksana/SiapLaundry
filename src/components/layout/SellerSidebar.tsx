@@ -10,6 +10,7 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   showBadge?: boolean;
+  badgeCount?: number;
 }
 
 function DashboardIcon({ className }: { className?: string }) {
@@ -120,6 +121,14 @@ function ProfileIcon({ className }: { className?: string }) {
   );
 }
 
+function ChatNavIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 function LogoutIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -145,53 +154,41 @@ export function SellerSidebar() {
   const pathname = usePathname();
   const logout = useAuthStore((state) => state.logout);
   const [pendingOrderCount, setPendingOrderCount] = React.useState(0);
+  const [unreadChatCount, setUnreadChatCount] = React.useState(0);
 
   // Fetch jumlah order pending_confirmation secara terpisah dari notifikasi
   React.useEffect(() => {
     async function fetchPending() {
       try {
         const { default: api } = await import('@/lib/api');
-        const res = await api.get('/seller/orders');
-        const orders = res.data.data ?? [];
+        const [ordersRes, notifsRes] = await Promise.all([
+          api.get('/seller/orders'),
+          api.get('/notifications'),
+        ]);
+        const orders = ordersRes.data.data ?? [];
         const count = orders.filter((o: { status: string }) => o.status === 'pending_confirmation').length;
         setPendingOrderCount(count);
+
+        // Hitung notifikasi chat belum dibaca
+        const notifs = notifsRes.data.data ?? [];
+        const chatCount = notifs.filter((n: { type: string; isRead: boolean }) => n.type === 'chat' && !n.isRead).length;
+        setUnreadChatCount(chatCount);
       } catch {
         // silent
       }
     }
     fetchPending();
-    // Poll setiap 30 detik
     const interval = setInterval(fetchPending, 30000);
     return () => clearInterval(interval);
   }, []);
 
   const navItems: NavItem[] = [
-    {
-      href: "/seller/dashboard",
-      label: "Dashboard",
-      icon: <DashboardIcon />,
-    },
-    {
-      href: "/seller/orders",
-      label: "Orders",
-      icon: <OrdersIcon />,
-      showBadge: true,
-    },
-    {
-      href: "/seller/services",
-      label: "Services",
-      icon: <ServicesIcon />,
-    },
-    {
-      href: "/seller/reviews",
-      label: "Reviews",
-      icon: <ReviewsIcon />,
-    },
-    {
-      href: "/seller/profile",
-      label: "Profile",
-      icon: <ProfileIcon />,
-    },
+    { href: "/seller/dashboard", label: "Dashboard", icon: <DashboardIcon /> },
+    { href: "/seller/orders", label: "Orders", icon: <OrdersIcon />, showBadge: true, badgeCount: pendingOrderCount },
+    { href: "/chat", label: "Chat", icon: <ChatNavIcon />, showBadge: true, badgeCount: unreadChatCount },
+    { href: "/seller/services", label: "Services", icon: <ServicesIcon /> },
+    { href: "/seller/reviews", label: "Reviews", icon: <ReviewsIcon /> },
+    { href: "/seller/profile", label: "Profile", icon: <ProfileIcon /> },
   ];
 
   const isActive = (href: string) => {
@@ -239,12 +236,11 @@ export function SellerSidebar() {
                 >
                   <span className="flex-shrink-0">{item.icon}</span>
                   <span className="flex-1">{item.label}</span>
-                  {item.showBadge && pendingOrderCount > 0 && (
+                  {item.showBadge && (item.badgeCount ?? 0) > 0 && (
                     <span
                       className="min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-red-500 text-canvas-light text-[11px] font-[500] leading-none px-1"
-                      aria-label={`${pendingOrderCount} order menunggu konfirmasi`}
                     >
-                      {pendingOrderCount > 99 ? "99+" : pendingOrderCount}
+                      {(item.badgeCount ?? 0) > 99 ? "99+" : item.badgeCount}
                     </span>
                   )}
                 </Link>

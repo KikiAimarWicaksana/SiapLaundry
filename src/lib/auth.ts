@@ -65,12 +65,12 @@ export async function setAuthCookies(accessToken: string, refreshToken: string) 
   const cookieStore = await cookies()
   const isProd = process.env.NODE_ENV === 'production'
 
+  // Session cookies — tidak ada maxAge, otomatis terhapus saat browser ditutup
   cookieStore.set(ACCESS_COOKIE, accessToken, {
     httpOnly: true,
     secure: isProd,
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 15, // 15 minutes
   })
 
   cookieStore.set(REFRESH_COOKIE, refreshToken, {
@@ -78,7 +78,6 @@ export async function setAuthCookies(accessToken: string, refreshToken: string) 
     secure: isProd,
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60 * 24 * 7, // 7 days
   })
 }
 

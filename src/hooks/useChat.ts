@@ -1,93 +1,89 @@
 "use client"
 
-import { useEffect, useCallback, useMemo } from 'react'
-import { useSocket } from '@/hooks/useSocket'
-import { useChatStore } from '@/stores/chatStore'
+import { useEffect, useCallback, useState, useRef } from 'react'
 import { useAuthStore } from '@/stores/authStore'
+import api from '@/lib/api'
 import type { Message } from '@/types/chat'
 
 export interface UseChatReturn {
   messages: Message[]
-  sendMessage: (content: string) => void
+  sendMessage: (content: string, receiverId: string) => Promise<void>
   isConnected: boolean
   markAsRead: () => void
+  loading: boolean
 }
 
-const EMPTY_MESSAGES: Message[] = []
-
-export function useChat(orderId: string, contactId: string): UseChatReturn {
-  const { socket, isConnected } = useSocket()
+export function useChat(orderId: string): UseChatReturn {
   const user = useAuthStore((state) => state.user)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [loading, setLoading] = useState(false)
+  const [isConnected, setIsConnected] = useState(true)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const lastCountRef = useRef(0)
 
-  const allMessages = useChatStore((state) => state.messages)
-  const addMessage = useChatStore((state) => state.addMessage)
-  const markAsReadInStore = useChatStore((state) => state.markAsRead)
-
-  // Stable reference — avoid new array on every render when contactId is empty
-  const messages = useMemo(
-    () => (contactId ? allMessages[contactId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES),
-    [allMessages, contactId]
-  )
-
-  // Subscribe to incoming messages
-  useEffect(() => {
-    if (!socket) return
-
-    const handleNewMessage = (message: Message) => {
-      // Only add messages for this contact/conversation
-      if (message.senderId === contactId) {
-        addMessage(contactId, message)
-      }
+  const fetchMessages = useCallback(async () => {
+    if (!orderId) return
+    try {
+      const res = await api.get(`/chat/${orderId}`)
+      const data: Message[] = res.data.data ?? []
+      setMessages(data)
+      lastCountRef.current = data.length
+      setIsConnected(true)
+    } catch {
+      setIsConnected(false)
     }
+  }, [orderId])
 
-    socket.on('chat:new_message', handleNewMessage)
+  // Load messages saat orderId berubah
+  useEffect(() => {
+    if (!orderId) {
+      setMessages([])
+      return
+    }
+    setLoading(true)
+    fetchMessages().finally(() => setLoading(false))
+
+    // Poll setiap 3 detik untuk pesan baru
+    pollRef.current = setInterval(fetchMessages, 3000)
 
     return () => {
-      socket.off('chat:new_message', handleNewMessage)
+      if (pollRef.current) clearInterval(pollRef.current)
     }
-  }, [socket, contactId, addMessage])
+  }, [orderId, fetchMessages])
 
-  // Send a message with optimistic update
-  const sendMessage = useCallback(
-    (content: string) => {
-      if (!socket || !user || !content.trim()) return
+  const sendMessage = useCallback(async (content: string, receiverId: string) => {
+    if (!content.trim() || !orderId || !user) return
 
-      const optimisticMessage: Message = {
-        id: `temp-${Date.now()}`,
-        senderId: user.id,
-        senderName: user.name,
-        senderAvatar: user.profilePhoto,
-        content: content.trim(),
-        timestamp: new Date().toISOString(),
-        isRead: false,
-      }
+    // Optimistic update
+    const optimistic: Message = {
+      id: `temp-${Date.now()}`,
+      senderId: user.id,
+      senderName: user.name,
+      senderAvatar: user.profilePhoto ?? undefined,
+      content: content.trim(),
+      timestamp: new Date().toISOString(),
+      isRead: false,
+    }
+    setMessages((prev) => [...prev, optimistic])
 
-      // Optimistic update: add message to store immediately
-      addMessage(contactId, optimisticMessage)
-
-      // Emit to server
-      socket.emit('chat:send_message', {
-        orderId,
-        contactId,
-        content: content.trim(),
+    try {
+      const res = await api.post(`/chat/${orderId}`, {
+        message: content.trim(),
+        receiverId: Number(receiverId),
       })
-    },
-    [socket, user, contactId, orderId, addMessage]
-  )
+      // Ganti optimistic dengan data real
+      setMessages((prev) =>
+        prev.map((m) => (m.id === optimistic.id ? res.data.data : m))
+      )
+    } catch {
+      // Hapus optimistic jika gagal
+      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+    }
+  }, [orderId, user])
 
-  // Mark all messages from this contact as read
   const markAsRead = useCallback(() => {
-    if (!socket) return
+    // Sudah di-handle di GET endpoint
+  }, [])
 
-    // Update store locally
-    markAsReadInStore(contactId)
-
-    // Emit to server
-    socket.emit('chat:mark_read', {
-      orderId,
-      contactId,
-    })
-  }, [socket, contactId, orderId, markAsReadInStore])
-
-  return { messages, sendMessage, isConnected, markAsRead }
+  return { messages, sendMessage, isConnected, markAsRead, loading }
 }

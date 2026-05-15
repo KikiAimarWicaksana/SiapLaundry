@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 
 export interface ChatInputProps {
-  onSend: (content: string) => void;
+  onSend: (content: string) => void | Promise<void>;
   disabled?: boolean;
 }
 

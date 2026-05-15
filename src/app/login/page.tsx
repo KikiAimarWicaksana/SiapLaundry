@@ -1,12 +1,28 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { LoginForm } from "@/components/forms/LoginForm";
-
-export const metadata = {
-  title: "Masuk - SiapLaundry",
-  description: "Masuk ke akun SiapLaundry Anda sebagai Pembeli, Penjual, atau Kurir.",
-};
+import { useAuthStore } from "@/stores/authStore";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  // Redirect jika sudah login
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+    switch (user.role) {
+      case "buyer": router.replace("/explore"); break;
+      case "seller": router.replace("/seller/dashboard"); break;
+      case "driver": router.replace("/driver/dashboard"); break;
+    }
+  }, [isAuthenticated, user, router]);
+  // Jangan render form jika sudah login
+  if (isAuthenticated) return null;
+
   return (
     <div className="min-h-screen bg-canvas-cream flex flex-col">
       {/* Navbar Light */}

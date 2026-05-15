@@ -39,8 +39,8 @@ model User {
   seller   Seller?
   driver   Driver?
 
-  sentMessages     Chat[]         @relation("ChatSender")
-  receivedMessages Chat[]         @relation("ChatReceiver")
+  sentMessages     ChatMessage[]  @relation("ChatMessageSender")
+  receivedMessages ChatMessage[]  @relation("ChatMessageReceiver")
   notifications    Notification[]
   refreshTokens    RefreshToken[]
 
@@ -244,7 +244,7 @@ model Order {
   deliveryDriver Driver?             @relation("DeliveryDriver", fields: [deliveryDriverId], references: [id])
   statusHistory  OrderStatusHistory[]
   review         Review?
-  chats          Chat[]
+  chats          ChatMessage[]
 
   @@index([buyerId])
   @@index([sellerId])
@@ -301,10 +301,10 @@ model Review {
 }
 
 // ============================================================
-// Chats
+// Chat Messages (HTTP-based, no Socket.IO required)
 // ============================================================
 
-model Chat {
+model ChatMessage {
   id         Int      @id @default(autoincrement())
   orderId    Int      @map("order_id")
   senderId   Int      @map("sender_id")
@@ -314,13 +314,13 @@ model Chat {
   createdAt  DateTime @default(now()) @map("created_at")
 
   order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  sender   User  @relation("ChatSender", fields: [senderId], references: [id])
-  receiver User  @relation("ChatReceiver", fields: [receiverId], references: [id])
+  sender   User  @relation("ChatMessageSender", fields: [senderId], references: [id])
+  receiver User  @relation("ChatMessageReceiver", fields: [receiverId], references: [id])
 
   @@index([orderId])
   @@index([senderId])
   @@index([receiverId])
-  @@map("chats")
+  @@map("chat_messages")
 }
 
 // ============================================================
