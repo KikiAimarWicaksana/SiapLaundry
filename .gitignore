@@ -42,3 +42,7 @@ next-env.d.ts
 
 # uploads (user-generated files)
 /public/uploads/
+
+# Cloud Run deployment env file (contains secrets)
+cloudrun_env.yaml
+
