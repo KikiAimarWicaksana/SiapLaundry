@@ -3,23 +3,30 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log('🗑️ Menghapus seluruh data pesanan...')
+  console.log('🗑️ Menghapus seluruh data pesanan, chat, dan ulasan...')
 
   try {
-    // 1. Hapus Notifikasi terkait order (biasanya menggunakan relatedId)
-    // Karena onDelete Cascade tidak berlaku otomatis untuk field generic like relatedId
-    await prisma.notification.deleteMany({
-      where: { type: 'order' }
+    // 1. Hapus Notifikasi terkait order, chat, dan review
+    const deletedNotifs = await prisma.notification.deleteMany({
+      where: {
+        type: {
+          in: ['order', 'chat', 'review'],
+        },
+      },
     })
+    console.log(`✅ Berhasil menghapus ${deletedNotifs.count} notifikasi terkait pesanan/chat/ulasan.`)
 
-    // 2. Hapus Chat Messages (sudah cascade, tapi deleteMany lebih cepat jika mau eksplisit)
-    await prisma.chatMessage.deleteMany({})
+    // 2. Hapus Chat Messages
+    const deletedChats = await prisma.chatMessage.deleteMany({})
+    console.log(`✅ Berhasil menghapus ${deletedChats.count} pesan chat.`)
 
-    // 3. Hapus Reviews (sudah cascade)
-    await prisma.review.deleteMany({})
+    // 3. Hapus Reviews
+    const deletedReviews = await prisma.review.deleteMany({})
+    console.log(`✅ Berhasil menghapus ${deletedReviews.count} ulasan.`)
 
-    // 4. Hapus Status History (sudah cascade)
-    await prisma.orderStatusHistory.deleteMany({})
+    // 4. Hapus Status History
+    const deletedStatus = await prisma.orderStatusHistory.deleteMany({})
+    console.log(`✅ Berhasil menghapus ${deletedStatus.count} riwayat status pesanan.`)
 
     // 5. Hapus Orders
     const deletedOrders = await prisma.order.deleteMany({})
@@ -27,12 +34,19 @@ async function main() {
 
     // 6. Reset counter di Seller & Driver
     await prisma.seller.updateMany({
-      data: { totalOrders: 0 }
+      data: {
+        totalOrders: 0,
+        totalReviews: 0,
+        averageRating: 0,
+      },
     })
     await prisma.driver.updateMany({
-      data: { totalDeliveries: 0 }
+      data: {
+        totalDeliveries: 0,
+        averageRating: 0,
+      },
     })
-    console.log('✅ Berhasil meriset counter pesanan pada Seller dan Driver.')
+    console.log('✅ Berhasil meriset counter pesanan dan ulasan pada Seller dan Driver.')
 
   } catch (error) {
     console.error('❌ Gagal menghapus data:', error)

@@ -61,13 +61,13 @@ export function LoginForm() {
       // Redirect based on role
       switch (data.role) {
         case "buyer":
-          router.push("/explore");
+          window.location.href = "/explore";
           break;
         case "seller":
-          router.push("/seller/dashboard");
+          window.location.href = "/seller/dashboard";
           break;
         case "driver":
-          router.push("/driver/dashboard");
+          window.location.href = "/driver/dashboard";
           break;
       }
     } catch (error: unknown) {

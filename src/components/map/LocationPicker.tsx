@@ -45,14 +45,33 @@ export function LocationPicker({ initialLocation, onConfirm, onCancel }: Locatio
         const found = result.results[0].formatted_address;
         setAddress(found);
         setManualAddress(found);
+        setGeocoding(false);
+        return;
       }
     } catch {
-      const fallback = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-      setAddress(fallback);
-      setManualAddress(fallback);
-    } finally {
-      setGeocoding(false);
+      // Abaikan dan coba fallback nominatim
     }
+
+    // Fallback gratis menggunakan OpenStreetMap Nominatim jika Google Geocoding terkendala limit billing
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+      );
+      const data = await res.json();
+      if (data && data.display_name) {
+        setAddress(data.display_name);
+        setManualAddress(data.display_name);
+        setGeocoding(false);
+        return;
+      }
+    } catch {
+      // Abaikan error nominatim
+    }
+
+    const fallback = `Lokasi Terpilih (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+    setAddress(fallback);
+    setManualAddress(fallback);
+    setGeocoding(false);
   }, []);
 
   /** Geocode alamat teks → koordinat (forward geocoding) */
@@ -108,7 +127,6 @@ export function LocationPicker({ initialLocation, onConfirm, onCancel }: Locatio
 
   const handleConfirm = () => {
     if (!markerPos && !manualAddress.trim()) return;
-    // Jika hanya isi manual tanpa pilih peta, gunakan koordinat 0,0
     onConfirm({
       lat: markerPos?.lat ?? 0,
       lng: markerPos?.lng ?? 0,
@@ -144,7 +162,12 @@ export function LocationPicker({ initialLocation, onConfirm, onCancel }: Locatio
             type="text"
             value={manualAddress}
             onChange={(e) => setManualAddress(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); forwardGeocode(manualAddress); } }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                forwardGeocode(manualAddress);
+              }
+            }}
             placeholder="Contoh: Jl. Merdeka No. 10, Bandung"
             className="flex-1 bg-canvas-light text-ink font-body text-[14px] font-[420] px-[12px] py-[9px] rounded-md border border-hairline-light outline-none focus:ring-2 focus:ring-ink/20 focus:border-ink placeholder:text-shade-40 transition-colors"
           />

@@ -91,7 +91,7 @@ export function RegisterBuyerForm() {
       if (payload?.user) {
         setUser(payload.user);
       }
-      router.push("/explore");
+      window.location.href = "/explore";
     } catch (error: unknown) {
       if (
         typeof error === "object" &&

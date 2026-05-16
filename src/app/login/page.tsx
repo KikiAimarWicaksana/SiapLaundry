@@ -15,13 +15,23 @@ export default function LoginPage() {
   useEffect(() => {
     if (!isAuthenticated || !user) return;
     switch (user.role) {
-      case "buyer": router.replace("/explore"); break;
-      case "seller": router.replace("/seller/dashboard"); break;
-      case "driver": router.replace("/driver/dashboard"); break;
+      case "buyer": window.location.href = "/explore"; break;
+      case "seller": window.location.href = "/seller/dashboard"; break;
+      case "driver": window.location.href = "/driver/dashboard"; break;
     }
-  }, [isAuthenticated, user, router]);
-  // Jangan render form jika sudah login
-  if (isAuthenticated) return null;
+  }, [isAuthenticated, user]);
+
+  // Tampilkan loading screen jika sedang proses redirect setelah login
+  if (isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-canvas-cream flex flex-col items-center justify-center">
+        <div className="w-12 h-12 rounded-pill border-4 border-ink/20 border-t-ink animate-spin mb-4" />
+        <p className="font-body text-[16px] font-[500] text-ink [font-feature-settings:'ss03']">
+          Mengalihkan ke halaman...
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-canvas-cream flex flex-col">

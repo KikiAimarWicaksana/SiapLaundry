@@ -121,7 +121,7 @@ export function RegisterSellerForm() {
       });
       const payload = res.data.data ?? res.data;
       if (payload?.user) setUser(payload.user);
-      router.push("/seller/dashboard");
+      window.location.href = "/seller/dashboard";
     } catch (error: unknown) {
       if (
         typeof error === "object" &&
