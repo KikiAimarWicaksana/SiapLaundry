@@ -53,14 +53,12 @@ export async function GET(_req: NextRequest) {
       const others = participants.filter(p => p.user && p.user.id !== authUser.userId)
 
       // Cek apakah order ini aktif untuk user yang sedang login
-      const userRole = String(authUser.role).toLowerCase();
-      const isOrderActiveForChat = (role: string, status: string) => {
-        if (role === 'buyer' || role === 'seller') return true;
-        // Kurir bisa lihat chat untuk semua order yang ditugaskan (kecuali batal)
-        return status !== 'cancelled';
+      // Aturan: Chat HANYA muncul untuk mitra/pelanggan/kurir yang sedang bertransaksi aktif (bukan completed dan bukan cancelled)
+      const isOrderActiveForChat = (status: string) => {
+        return status !== 'completed' && status !== 'cancelled';
       };
 
-      if (!isOrderActiveForChat(userRole, order.status)) continue;
+      if (!isOrderActiveForChat(order.status)) continue;
 
       for (const other of others) {
         if (!other.user) continue;

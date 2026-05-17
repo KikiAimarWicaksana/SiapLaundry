@@ -115,9 +115,10 @@ interface DriverInfoSectionProps {
   title: string;
   driver: { id: string; name: string; phone: string; vehiclePlate: string };
   orderId: string;
+  isActive: boolean;
 }
 
-function DriverInfoSection({ title, driver, orderId }: DriverInfoSectionProps) {
+function DriverInfoSection({ title, driver, orderId, isActive }: DriverInfoSectionProps) {
   return (
     <section className="bg-canvas-light rounded-lg border border-hairline-light p-4 md:p-6">
       <h2 className="font-body text-[14px] font-[550] text-shade-50 uppercase tracking-wider mb-3 [font-feature-settings:'ss03']">
@@ -138,14 +139,16 @@ function DriverInfoSection({ title, driver, orderId }: DriverInfoSectionProps) {
           </p>
         </div>
       </div>
-      <div className="mt-3">
-        <Link href={`/chat?order=${orderId}&contact=${driver.id}`}>
-          <Button variant="outline-light" size="sm" className="gap-1.5">
-            <ChatIcon />
-            Chat Kurir
-          </Button>
-        </Link>
-      </div>
+      {isActive && (
+        <div className="mt-3">
+          <Link href={`/chat?order=${orderId}&contact=${driver.id}`}>
+            <Button variant="outline-light" size="sm" className="gap-1.5">
+              <ChatIcon />
+              Chat Kurir
+            </Button>
+          </Link>
+        </div>
+      )}
     </section>
   );
 }
@@ -446,14 +449,14 @@ export default function OrderDetailPage() {
         {/* Info Kurir Pickup */}
         {order.pickupDriver && (
           <div className="mb-4">
-            <DriverInfoSection title="Kurir Pickup" driver={order.pickupDriver} orderId={order.id} />
+            <DriverInfoSection title="Kurir Pickup" driver={order.pickupDriver} orderId={order.id} isActive={order.status !== "completed" && order.status !== "cancelled"} />
           </div>
         )}
 
         {/* Info Kurir Delivery */}
         {order.deliveryDriver && (
           <div className="mb-4">
-            <DriverInfoSection title="Kurir Delivery" driver={order.deliveryDriver} orderId={order.id} />
+            <DriverInfoSection title="Kurir Delivery" driver={order.deliveryDriver} orderId={order.id} isActive={order.status !== "completed" && order.status !== "cancelled"} />
           </div>
         )}
 

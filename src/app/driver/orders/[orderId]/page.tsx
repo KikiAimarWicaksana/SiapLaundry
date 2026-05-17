@@ -237,12 +237,14 @@ export default function DriverOrderDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Link href="/chat">
-                <Button variant="outline-light" size="sm" className="gap-1">
-                  <ChatIcon />
-                  Chat
-                </Button>
-              </Link>
+              {order.status !== "completed" && order.status !== "cancelled" && (
+                <Link href={`/chat?order=${order.id}`}>
+                  <Button variant="outline-light" size="sm" className="gap-1">
+                    <ChatIcon />
+                    Chat
+                  </Button>
+                </Link>
+              )}
               <a href={`tel:${order.buyer.phone}`}>
                 <Button variant="outline-light" size="sm" className="gap-1">
                   <PhoneIcon />

@@ -238,12 +238,14 @@ export function OrderCard({ order }: OrderCardProps) {
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2 pt-2 border-t border-hairline-light">
-        <Link href={`/chat?order=${order.id}`}>
-          <Button variant="outline-light" size="sm" className="gap-1.5">
-            <ChatIcon />
-            Chat dengan Laundry
-          </Button>
-        </Link>
+        {order.status !== "completed" && order.status !== "cancelled" && (
+          <Link href={`/chat?order=${order.id}`}>
+            <Button variant="outline-light" size="sm" className="gap-1.5">
+              <ChatIcon />
+              Chat dengan Laundry
+            </Button>
+          </Link>
+        )}
 
         {showTrackDriver && (
           <Link href={`/order/${order.id}?track=true`}>
